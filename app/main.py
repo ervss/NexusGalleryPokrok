@@ -667,7 +667,7 @@ async def pornhoarder_update_stream(payload: dict, db: Session = Depends(get_db)
             else:
                 from .extractors.recurbate import RecurbateExtractor
                 extractor = RecurbateExtractor()
-            extracted = asyncio.run(extractor.extract(source_url))
+            extracted = await extractor.extract(source_url)
             if extracted:
                 candidate = (extracted.get("stream_url") or "").strip()
                 if (

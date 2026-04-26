@@ -13,11 +13,16 @@
             --glass: rgba(255, 255, 255, 0.05);
             --glass-border: rgba(255, 255, 255, 0.1);
             --accent: #ff00c8;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --danger: #e74c3c;
         }
 
+        * { box-sizing: border-box; }
+
         body {
-            width: 800px;
-            height: 720px;
+            width: 790px;
+            height: 760px;
             margin: 0;
             padding: 0;
             background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
@@ -30,41 +35,121 @@
             display: flex;
             flex-direction: column;
             height: 100%;
-            padding: 15px 20px;
-            box-sizing: border-box;
+            padding: 12px 18px;
         }
 
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
+            gap: 10px;
         }
 
         .logo {
-            font-size: 1.8rem;
+            font-size: 1.5rem;
             font-weight: 600;
             background: linear-gradient(to right, var(--primary), var(--secondary));
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
             letter-spacing: 1px;
+            flex-shrink: 0;
         }
 
+        #folder-name {
+            font-size: 0.85rem;
+            opacity: 0.7;
+            flex: 1;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ── TAB BAR ── */
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 6px;
+        }
+        .tab-btn {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: rgba(255,255,255,0.6);
+            border-radius: 8px;
+            padding: 5px 14px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .tab-btn:hover { color: white; border-color: rgba(255,255,255,0.3); }
+        .tab-btn.active {
+            background: linear-gradient(135deg, rgba(0,210,255,0.2), rgba(157,80,187,0.2));
+            border-color: var(--primary);
+            color: white;
+        }
+        .tab-badge {
+            background: var(--primary);
+            color: #0f0c29;
+            border-radius: 10px;
+            padding: 1px 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        /* ── PANELS ── */
+        .panel { display: none; flex-direction: column; flex: 1; min-height: 0; }
+        .panel.active { display: flex; }
+
+        /* ── SEARCH PANEL ── */
+        #ph-search-panel {
+            padding: 10px;
+            background: rgba(0,210,255,0.04);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            display: none;
+            gap: 8px;
+            align-items: center;
+        }
+        #ph-search-panel.visible { display: flex; }
+        #ph-search-input {
+            flex: 1;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 8px 14px;
+            color: white;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.9rem;
+            outline: none;
+        }
+        #ph-search-input:focus { border-color: var(--primary); }
+
+        /* ── CONTROLS ── */
         .controls {
             display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
+            gap: 10px;
+            margin-bottom: 10px;
         }
 
         .search-bar {
             background: var(--glass);
             border: 1px solid var(--glass-border);
             border-radius: 12px;
-            padding: 12px 20px;
+            padding: 9px 16px;
             color: white;
             flex-grow: 1;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             outline: none;
             transition: all 0.3s ease;
         }
@@ -74,266 +159,501 @@
             border: 1px solid var(--glass-border);
             border-radius: 12px;
             color: white;
-            padding: 0 15px;
+            padding: 0 12px;
             outline: none;
             font-family: 'Outfit', sans-serif;
             cursor: pointer;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
 
-        .search-bar:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        .search-bar:focus { border-color: var(--primary); box-shadow: 0 0 12px rgba(0,210,255,0.2); }
+
+        /* ── TOGGLE ROW ── */
+        .toggle-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            background: rgba(0,210,255,0.05);
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            font-size: 0.82rem;
+            align-items: center;
+        }
+        .toggle-row label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+        .toggle-row label input { cursor: pointer; }
+        #bunkr-controls {
+            display: none;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            background: rgba(157,80,187,0.08);
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            font-size: 0.82rem;
+            align-items: center;
+        }
+        #bunkr-controls label {
+            display: flex; align-items: center; gap: 6px; cursor: pointer; color: #e0b3ff;
         }
 
-        .stats {
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.5);
-            margin-bottom: 15px;
+        /* ── FILTER ROW ── */
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 8px;
+            padding: 7px 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            font-size: 0.8rem;
+            align-items: center;
+        }
+        .filter-row input[type="number"] {
+            width: 44px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            color: white;
+            border-radius: 6px;
+            padding: 3px 6px;
+            outline: none;
+            font-size: 0.8rem;
+        }
+        .filter-row select {
+            background: #1a1a3a;
+            border: 1px solid var(--glass-border);
+            color: white;
+            border-radius: 6px;
+            padding: 2px 8px;
+            outline: none;
+            cursor: pointer;
+            font-size: 0.8rem;
         }
 
+        /* ── PORT SELECTOR ── */
+        .port-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            font-size: 0.8rem;
+        }
+        .port-row label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--primary); }
+
+        /* ── STATS ── */
+        .stats-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.82rem;
+            color: rgba(255,255,255,0.55);
+            margin-bottom: 8px;
+            gap: 8px;
+        }
+        #stats-text { flex: 1; }
+
+        /* ── PROGRESS BAR ── */
+        #progress-bar-wrap {
+            display: none;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            margin-bottom: 6px;
+            overflow: hidden;
+        }
+        #progress-bar {
+            height: 100%;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            border-radius: 2px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        /* ── IMPORT RESULT TOAST ── */
+        #import-toast {
+            display: none;
+            position: fixed;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20,20,50,0.97);
+            border: 1px solid var(--primary);
+            border-radius: 12px;
+            padding: 10px 20px;
+            font-size: 0.85rem;
+            z-index: 999;
+            text-align: center;
+            min-width: 260px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+
+        /* ── VIEW TOGGLE ── */
+        #view-toggle {
+            display: flex;
+            gap: 4px;
+        }
+        .view-btn {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: rgba(255,255,255,0.5);
+            border-radius: 6px;
+            padding: 3px 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .view-btn.active { border-color: var(--primary); color: var(--primary); }
+
+        /* ── GRID ── */
         .video-grid {
-            height: 480px;
+            flex: 1;
+            min-height: 0;
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
             overflow-y: auto;
-            padding-right: 10px;
+            padding-right: 6px;
             align-content: start;
         }
-
-        .video-grid::-webkit-scrollbar {
-            width: 8px;
+        .video-grid.list-view {
+            grid-template-columns: 1fr;
         }
+        .video-grid::-webkit-scrollbar { width: 6px; }
+        .video-grid::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 10px; }
 
-        .video-grid::-webkit-scrollbar-thumb {
-            background: var(--glass-border);
-            border-radius: 10px;
-        }
-
+        /* ── GRID CARD ── */
         .video-card {
             background: var(--glass);
             border: 1px solid var(--glass-border);
-            border-radius: 14px;
+            border-radius: 12px;
             overflow: hidden;
             position: relative;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
             display: flex;
             flex-direction: column;
-            min-height: 220px;
-            height: auto;
+            height: 210px;
+            min-height: 210px;
         }
+        .video-card:hover { transform: translateY(-6px); border-color: var(--primary); box-shadow: 0 12px 25px rgba(0,0,0,0.4); }
+        .video-card.selected { border: 2px solid var(--primary); background: rgba(0,210,255,0.1); }
+        .video-card.duplicate { border-color: var(--warning) !important; }
+        .video-card.duplicate .dup-badge { display: flex; }
+        .video-card.queued { border-color: var(--secondary) !important; }
 
-        .video-card:hover {
-            transform: translateY(-8px);
-            border-color: var(--primary);
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+        /* List view card */
+        .video-grid.list-view .video-card {
+            height: 64px;
+            min-height: 64px;
+            flex-direction: row;
+            align-items: center;
         }
-
-        .video-card.selected {
-            border: 2px solid var(--primary);
-            background: rgba(0, 210, 255, 0.1);
+        .video-grid.list-view .thumbnail {
+            width: 100px !important;
+            min-width: 100px;
+            height: 64px !important;
+            min-height: 64px !important;
+            border-radius: 0;
         }
+        .video-grid.list-view .info { flex: 1; padding: 8px 12px; }
+        .video-grid.list-view .video-card:hover { transform: none; border-color: var(--primary); }
 
         .thumbnail {
             width: 100%;
-            height: 135px;
-            min-height: 135px;
+            height: 128px;
+            min-height: 128px;
             background-size: cover;
             background-position: center;
             background-color: #1a1a3a;
             position: relative;
+            overflow: hidden;
         }
 
         .selection-overlay {
             position: absolute;
-            top: 12px;
-            right: 12px;
-            width: 24px;
-            height: 24px;
+            top: 8px;
+            right: 8px;
+            width: 22px;
+            height: 22px;
             border: 2px solid white;
             border-radius: 50%;
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0,0,0,0.3);
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s ease;
+            transition: all 0.25s;
+            z-index: 2;
         }
+        .video-card.selected .selection-overlay { background: var(--primary); border-color: var(--primary); }
+        .video-card.selected .selection-overlay::after { content: '✓'; color: white; font-size: 12px; }
 
-        .video-card.selected .selection-overlay {
-            background: var(--primary);
-            border-color: var(--primary);
+        .dup-badge {
+            display: none;
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: var(--warning);
+            color: #000;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            z-index: 2;
         }
-
-        .video-card.selected .selection-overlay::after {
-            content: '✓';
+        .queue-badge {
+            display: none;
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            background: var(--secondary);
             color: white;
-            font-size: 14px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            z-index: 2;
+        }
+        .direct-badge {
+            display: none;
+            position: absolute;
+            top: 8px;
+            right: 38px;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+            font-size: 0.65rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            z-index: 2;
+            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.4);
+            border: 1px solid rgba(255,255,255,0.2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            animation: badge-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes badge-pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .video-card.direct-ok .direct-badge { display: flex; }
+        .video-card.queued .queue-badge { display: flex; }
+        .smart-preview-badge {
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(0, 210, 255, 0.35);
+            color: #d8f7ff;
+            font-size: 0.62rem;
+            font-weight: 600;
+            padding: 3px 6px;
+            border-radius: 6px;
+            line-height: 1.2;
+            text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+            z-index: 2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .video-grid.list-view .smart-preview-badge {
+            bottom: 4px;
+            left: 4px;
+            right: 4px;
         }
 
         .info {
-            padding: 12px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 4px;
         }
-
-        .title-row {
-            display: flex;
-            align-items: flex-start;
-            gap: 6px;
-            min-width: 0;
-        }
-
-        .type-tag {
-            flex-shrink: 0;
-            font-size: 0.58rem;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            padding: 2px 5px;
-            border-radius: 4px;
-            text-transform: uppercase;
-        }
-
-        .type-tag.type-direct {
-            background: rgba(34, 197, 94, 0.25);
-            color: #4ade80;
-            border: 1px solid rgba(74, 222, 128, 0.45);
-        }
-
-        .type-tag.type-page {
-            background: rgba(251, 146, 60, 0.2);
-            color: #fdba74;
-            border: 1px solid rgba(251, 146, 60, 0.45);
-        }
-
         .title {
-            font-size: 0.95rem;
+            font-size: 0.88rem;
             font-weight: 600;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             color: #fff;
-            flex: 1;
-            min-width: 0;
         }
-
-        .stream-url-line {
-            font-size: 0.62rem;
-            line-height: 1.35;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            color: rgba(255, 255, 255, 0.55);
-            word-break: break-all;
-            max-height: 4.2rem;
-            overflow-y: auto;
-            margin-top: 2px;
-            user-select: all;
-            cursor: text;
-        }
-
         .meta-info {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-top: 5px;
+            gap: 6px;
+            flex-wrap: wrap;
         }
-
         .quality-badge {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             background: var(--primary);
             color: #0f0c29;
-            padding: 2px 6px;
+            padding: 2px 5px;
             border-radius: 4px;
             font-weight: 800;
             text-transform: uppercase;
+            flex-shrink: 0;
         }
-
         .duration {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 600;
             color: var(--primary);
-            display: flex;
-            align-items: center;
-            gap: 3px;
-            margin-left: 8px;
             opacity: 0.9;
         }
-
         .file-size {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.5);
+            margin-left: auto;
         }
 
+        /* ── FOOTER ── */
         footer {
-            margin-top: 15px;
+            margin-top: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
         }
 
         .btn {
-            padding: 12px 25px;
-            border-radius: 12px;
+            padding: 9px 18px;
+            border-radius: 10px;
             border: none;
             font-family: 'Outfit', sans-serif;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.25s;
+            font-size: 0.85rem;
+            white-space: nowrap;
         }
-
         .btn-secondary {
             background: var(--glass);
             color: white;
             border: 1px solid var(--glass-border);
         }
-
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); }
         .btn-primary {
             background: linear-gradient(to right, var(--primary), var(--secondary));
             color: white;
-            box-shadow: 0 5px 15px rgba(0, 210, 255, 0.3);
+            box-shadow: 0 4px 12px rgba(0,210,255,0.3);
         }
-
-        .btn-primary:hover {
-            transform: scale(1.05);
-            box-shadow: 0 8px 20px rgba(0, 210, 255, 0.5);
+        .btn-primary:hover { transform: scale(1.04); box-shadow: 0 6px 18px rgba(0,210,255,0.5); }
+        .btn-primary:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-queue {
+            background: rgba(157,80,187,0.2);
+            color: #e0b3ff;
+            border: 1px solid rgba(157,80,187,0.4);
         }
-
-        .btn-primary:disabled {
-            filter: grayscale(1);
-            opacity: 0.5;
-            cursor: not-allowed;
+        .btn-queue:hover { background: rgba(157,80,187,0.35); }
+        .btn-queue:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-open-dash {
+            background: rgba(46,204,113,0.15);
+            color: var(--success);
+            border: 1px solid rgba(46,204,113,0.3);
         }
+        .btn-open-dash:hover { background: rgba(46,204,113,0.25); }
 
+        /* ── LOADER ── */
         #loader {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 300px;
+            flex: 1;
         }
-
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid var(--glass);
-            border-top: 4px solid var(--primary);
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--glass);
+            border-top: 3px solid var(--primary);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 0.9s linear infinite;
         }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
+        /* ── WATCHLIST PANEL ── */
+        #watchlist-panel {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        #watchlist-panel::-webkit-scrollbar { width: 6px; }
+        #watchlist-panel::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 10px; }
+        .wl-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            margin-bottom: 6px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .wl-item:hover { border-color: var(--primary); }
+        .wl-thumb {
+            width: 64px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 6px;
+            background: #1a1a3a;
+            flex-shrink: 0;
+        }
+        .wl-info { flex: 1; overflow: hidden; }
+        .wl-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 600;
+            color: #fff;
+        }
+        .wl-meta { color: rgba(255,255,255,0.45); font-size: 0.72rem; margin-top: 2px; }
+        .wl-remove {
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.3);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: color 0.2s;
+        }
+        .wl-remove:hover { color: var(--danger); }
+        .wl-import-btn {
+            background: rgba(0,210,255,0.15);
+            border: 1px solid rgba(0,210,255,0.3);
+            color: var(--primary);
+            font-size: 0.72rem;
+            padding: 3px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            transition: background 0.2s;
+        }
+        .wl-import-btn:hover { background: rgba(0,210,255,0.28); }
+        .wl-empty {
+            text-align: center;
+            padding: 40px 20px;
+            opacity: 0.4;
+            font-size: 0.9rem;
+        }
+        .wl-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -341,109 +661,137 @@
 <body>
     <div class="container">
         <header>
-            <div class="logo">GOFILE VIP</div>
-            <div id="folder-name" style="font-size: 0.9rem; opacity: 0.7;">Analýza priečinka...</div>
+            <div class="logo">QUANTUM</div>
+            <div id="folder-name">Analýza stránky...</div>
+            <div id="view-toggle">
+                <button class="view-btn active" id="grid-view-btn" title="Grid view">⊞</button>
+                <button class="view-btn" id="list-view-btn" title="List view">☰</button>
+            </div>
         </header>
 
-        <div class="controls">
-            <input type="text" class="search-bar" id="search-input" placeholder="Hľadať videá...">
-            <select id="sort-select" class="sort-select">
-                <option value="name">Názov (A-Z)</option>
-                <option value="size-desc">Veľkosť (Najväčšie)</option>
-                <option value="size-asc">Veľkosť (Najmenšie)</option>
-                <option value="video-count-desc">Počet videí (Najviac)</option>
-            </select>
+        <!-- TAB BAR -->
+        <div class="tab-bar">
+            <button class="tab-btn active" data-tab="main">🎬 Videá <span class="tab-badge" id="videos-count-badge">0</span></button>
+            <button class="tab-btn" data-tab="watchlist">🕐 Watchlist <span class="tab-badge" id="wl-count-badge">0</span></button>
         </div>
 
-        <div id="turbo-controls"
-            style="margin-bottom: 10px; padding: 10px; background: rgba(0, 210, 255, 0.05); border-radius: 12px; border: 1px solid var(--glass-border); display: flex; flex-wrap: wrap; gap: 15px; font-size: 0.85rem;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--primary);">
-                <input type="checkbox" id="turbo-mode" style="width: 16px; height: 16px; cursor: pointer;">
-                <span style="font-weight: 600;">Turbo (4 str.)</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #ff00c8;">
-                <input type="checkbox" id="deep-scan" style="width: 16px; height: 16px; cursor: pointer;">
-                <span style="font-weight: 600;">Deep Scan (Všetko)</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                <input type="checkbox" id="send-to-dashboard" style="width: 16px; height: 16px; cursor: pointer;">
-                <span>Auto-odoslať</span>
-            </label>
-        </div>
+        <!-- ══ MAIN TAB ══ -->
+        <div class="panel active" id="tab-main">
 
-        <div id="bunkr-controls"
-            style="display: none; margin-bottom: 10px; padding: 10px; background: rgba(157, 80, 187, 0.08); border-radius: 12px; border: 1px solid var(--glass-border); flex-wrap: wrap; gap: 15px; font-size: 0.85rem;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #e0b3ff;">
-                <input type="checkbox" id="bunkr-fetch-direct" checked style="width: 16px; height: 16px; cursor: pointer;">
-                <span style="font-weight: 600;">Bunkr: priame MP4 + plná metadata (API / stránka súboru)</span>
-            </label>
-            <span style="opacity: 0.65; font-size: 0.78rem;">Bez zaškrtnutia: len zoznam zo stránky albumu (rýchle). So zaškrtnutím: pre každý súbor získa priamy stream URL (pomalšie).</span>
-        </div>
-
-        <div id="filter-controls"
-            style="margin-bottom: 10px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 12px; border: 1px solid var(--glass-border); display: flex; flex-wrap: wrap; gap: 15px; font-size: 0.82rem;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="opacity: 0.7;">Dĺžka (min):</span>
-                <input type="number" id="min-duration" placeholder="Min"
-                    style="width: 45px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 6px; padding: 3px 6px; outline: none;">
-                <span>-</span>
-                <input type="number" id="max-duration" placeholder="Max"
-                    style="width: 45px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 6px; padding: 3px 6px; outline: none;">
+            <!-- PornHoarder inline search -->
+            <div id="ph-search-panel">
+                <span style="opacity:0.6;font-size:0.8rem;white-space:nowrap;">🔍 PH Search:</span>
+                <input type="text" id="ph-search-input" placeholder="Hľadaj na PornHoarder.io…">
+                <button class="btn btn-secondary" id="ph-search-btn" style="padding:6px 14px;font-size:0.8rem;">Hľadaj</button>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="opacity: 0.7;">Kvalita:</span>
-                <select id="quality-filter"
-                    style="background: #1a1a3a; border: 1px solid var(--glass-border); color: white; border-radius: 6px; padding: 2px 10px; outline: none; cursor: pointer;">
-                    <option value="all">Všetka</option>
-                    <option value="4K">4K / UHD</option>
-                    <option value="1080p">1080p / Full HD</option>
-                    <option value="720p">720p / HD</option>
-                    <option value="SD">SD / 480p / 360p</option>
+
+            <div class="controls">
+                <input type="text" class="search-bar" id="search-input" placeholder="Filtrovať v zozname…">
+                <select id="sort-select" class="sort-select">
+                    <option value="name">Názov (A-Z)</option>
+                    <option value="size-desc">Veľkosť ↓</option>
+                    <option value="size-asc">Veľkosť ↑</option>
+                    <option value="duration-desc">Dĺžka ↓</option>
+                    <option value="duration-asc">Dĺžka ↑</option>
+                    <option value="video-count-desc">Počet videí ↓</option>
                 </select>
             </div>
-        </div>
 
-        <div id="port-selector"
-            style="margin-bottom: 10px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 12px; border: 1px solid var(--glass-border); display: flex; align-items: center; gap: 15px; font-size: 0.85rem;">
-            <span style="opacity: 0.7;">Cieľový Port:</span>
-            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--primary);">
-                <input type="radio" name="dashboard-port" value="8000" checked
-                    style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary);">
-                <span style="font-weight: 600;">8000</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--primary);">
-                <input type="radio" name="dashboard-port" value="8001"
-                    style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary);">
-                <span style="font-weight: 600;">8001</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--primary);">
-                <input type="radio" name="dashboard-port" value="8002"
-                    style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary);">
-                <span style="font-weight: 600;">8002</span>
-            </label>
-        </div>
-
-        <div class="stats" id="stats-text">Načítavam súbory...</div>
-
-        <div id="loader">
-            <div class="spinner"></div>
-            <p style="margin-top: 15px; color: rgba(255,255,255,0.5);">Pripravujem galériu...</p>
-        </div>
-
-        <div class="video-grid" id="video-grid" style="display: none;">
-            <!-- Video cards will be injected here -->
-        </div>
-
-        <footer>
-            <button class="btn btn-secondary" id="select-all">Vybrať všetko</button>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-secondary" id="copy-btn" disabled
-                    style="border-color: var(--secondary);">Kopírovať ku mne</button>
-                <button class="btn btn-primary" id="import-btn" disabled>Importovať Dashboard</button>
+            <div class="toggle-row" id="turbo-controls">
+                <label style="color:var(--primary);">
+                    <input type="checkbox" id="turbo-mode"> <span style="font-weight:600;">Turbo (4 str.)</span>
+                </label>
+                <label style="color:#ff00c8;">
+                    <input type="checkbox" id="deep-scan"> <span style="font-weight:600;">Deep (Všetko)</span>
+                </label>
+                <label>
+                    <input type="checkbox" id="send-to-dashboard"> <span>Auto-odoslať</span>
+                </label>
+                <label>
+                    <input type="checkbox" id="check-duplicates"> <span style="color:var(--warning);">Dupl. kontrola</span>
+                </label>
             </div>
-        </footer>
+
+            <div id="bunkr-controls">
+                <label>
+                    <input type="checkbox" id="bunkr-fetch-direct">
+                    <span style="font-weight:600;">Bunkr: priame MP4 (API / stránka súboru)</span>
+                </label>
+                <span style="opacity:0.55;font-size:0.75rem;">Bez zaškrtnutia: rýchly zoznam. So zaškrtnutím: priame stream URL (pomalšie).</span>
+            </div>
+
+            <div class="filter-row">
+                <span style="opacity:0.7;">Dĺžka (min):</span>
+                <input type="number" id="min-duration" placeholder="Min">
+                <span>–</span>
+                <input type="number" id="max-duration" placeholder="Max">
+                <span style="opacity:0.7;margin-left:8px;">Kvalita:</span>
+                <select id="quality-filter">
+                    <option value="all">Všetka</option>
+                    <option value="4K">4K</option>
+                    <option value="1080p">1080p</option>
+                    <option value="720p">720p</option>
+                    <option value="SD">SD</option>
+                </select>
+            </div>
+
+            <div class="port-row">
+                <span style="opacity:0.6;">Port:</span>
+                <label><input type="radio" name="dashboard-port" value="8000" checked style="accent-color:var(--primary);"> <span style="font-weight:600;">8000</span></label>
+                <label><input type="radio" name="dashboard-port" value="8001" style="accent-color:var(--primary);"> <span style="font-weight:600;">8001</span></label>
+                <label><input type="radio" name="dashboard-port" value="8002" style="accent-color:var(--primary);"> <span style="font-weight:600;">8002</span></label>
+            </div>
+
+            <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+
+            <div class="stats-bar">
+                <span id="stats-text">Načítavam…</span>
+                <button id="find-direct-btn" class="btn" style="margin-left:auto; padding: 4px 12px; font-size: 0.75rem; background: var(--primary-gradient); display: none; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">Hľadať DIRECT</button>
+                <span id="bg-fetch-stats" style="color:var(--primary);display:none;margin-left:8px;font-weight:600;"></span>
+                <span id="dup-stats" style="color:var(--warning);display:none;"></span>
+            </div>
+            <div id="ph-debug"
+                style="display:none;margin:-2px 0 8px 0;padding:6px 10px;background:rgba(157,80,187,0.14);border:1px solid var(--glass-border);border-radius:8px;font-size:0.74rem;line-height:1.25;color:#e7d3ff;">
+                PH debug: čakám na stream…
+            </div>
+
+            <div id="loader">
+                <div class="spinner"></div>
+                <p style="margin-top:12px;color:rgba(255,255,255,0.4);font-size:0.85rem;">Pripravujem galériu…</p>
+            </div>
+
+            <div class="video-grid" id="video-grid" style="display:none;"></div>
+
+            <footer>
+                <div style="display:flex;gap:6px;">
+                    <button class="btn btn-secondary" id="select-all">✓ Všetko</button>
+                    <button class="btn btn-secondary" id="deselect-all">✗ Zrušiť</button>
+                    <button class="btn btn-queue" id="queue-btn" disabled>+ Queue</button>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button class="btn btn-open-dash" id="open-dash-btn">↗ Dashboard</button>
+                    <button class="btn btn-secondary" id="copy-btn" disabled style="border-color:var(--secondary);">Kopírovať</button>
+                    <button class="btn btn-secondary" id="copy-direct-btn" disabled style="border-color:var(--success); color:var(--success); background:rgba(46,204,113,0.1);">Kopírovať Direct</button>
+                    <button class="btn btn-primary" id="import-btn" disabled>Importovať (0)</button>
+                </div>
+            </footer>
+        </div>
+
+        <!-- ══ WATCHLIST TAB ══ -->
+        <div class="panel" id="tab-watchlist">
+            <div class="wl-actions">
+                <button class="btn btn-primary" id="wl-import-all-btn" style="font-size:0.8rem;padding:7px 14px;">⬆ Import všetkého</button>
+                <button class="btn btn-secondary" id="wl-clear-btn" style="font-size:0.8rem;padding:7px 14px;">🗑 Vymazať všetko</button>
+            </div>
+            <div id="watchlist-panel">
+                <div class="wl-empty" id="wl-empty">Watchlist je prázdny.<br>Vyber videá a klikni "+ Queue".</div>
+            </div>
+        </div>
     </div>
+
+    <!-- Import result toast -->
+    <div id="import-toast"></div>
+
     <script src="popup.js"></script>
 </body>
-
 </html>
