@@ -13,6 +13,143 @@ let isListView = false;
 let bunkrThumbPageOrigin = null;
 let isBackgroundResolving = false;
 
+function isLeakLikeUrl(url) {
+    try {
+        const host = new URL(url).hostname.toLowerCase();
+        return host === 'leakporner.com' || host.endsWith('.leakporner.com') || host === 'djav.org' || host.endsWith('.djav.org');
+    } catch {
+        return /(?:leakporner\.com|djav\.org)/i.test(String(url || ''));
+    }
+}
+
+function isDjavUrl(url) {
+    try {
+        const host = new URL(url).hostname.toLowerCase();
+        return host === 'djav.org' || host.endsWith('.djav.org');
+    } catch {
+        return /(?:^|\.)djav\.org/i.test(String(url || ''));
+    }
+}
+
+function normalizeHostName(value) {
+    if (!value) return '';
+    const raw = String(value).trim().toLowerCase();
+    if (!raw) return '';
+
+    if (raw.startsWith('blob:')) {
+        try {
+            return normalizeHostName(new URL(raw.slice(5)).hostname);
+        } catch {
+            return '';
+        }
+    }
+
+    const stripped = raw
+        .replace(/^[a-z]+:\/\//, '')
+        .replace(/\/.*$/, '')
+        .replace(/:\d+$/, '')
+        .replace(/^www\./, '');
+
+    const parts = stripped.split('.').filter(Boolean);
+    if (parts.length >= 3 && /^(?:www|m|amp|cdn\d*|cache\d*|img\d*|media\d*|static\d*|video\d*|v\d+|w\d+)$/i.test(parts[0])) {
+        return parts.slice(1).join('.');
+    }
+
+    return stripped;
+}
+
+function looksLikeHostname(value) {
+    const host = normalizeHostName(value);
+    if (!host) return false;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]') return false;
+    // Host filter should represent real domains/IPs, not source labels like "leakporner".
+    if (host.includes('.')) return true;
+    return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
+}
+
+function getPageHost(video) {
+    if (!video) return '';
+    const candidates = [
+        video.source_url,
+        video.sourceUrl,
+        video.sourceURL,
+        video.page_url,
+        video.pageUrl,
+    ];
+    for (const candidate of candidates) {
+        const host = normalizeHostName(candidate);
+        if (host) return host;
+    }
+    return '';
+}
+
+function getVideoHost(video) {
+    if (!video) return '';
+
+    const explicitCandidates = [
+        video.playback_host,
+        video.stream_host,
+        video.host,
+        video.hosting,
+        video.provider,
+        video.source_host,
+        video.site_host,
+        video.site,
+        video.source_site,
+    ];
+    for (const candidate of explicitCandidates) {
+        if (looksLikeHostname(candidate)) return normalizeHostName(candidate);
+    }
+
+    const pageHost = getPageHost(video);
+    const candidates = [
+        video.directUrl,
+        video.direct_url,
+        video.url,
+        video.stream_url,
+        video.source_url,
+        video.sourceUrl,
+        video.sourceURL,
+    ];
+
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        try {
+            const normalized = String(candidate).trim();
+            const host = normalizeHostName(
+                normalized.startsWith('blob:')
+                    ? new URL(normalized.slice(5)).hostname
+                    : new URL(normalized, location.href).hostname
+            );
+            if (host && looksLikeHostname(host)) {
+                if (pageHost && host === pageHost) continue;
+                return host;
+            }
+        } catch {
+            const host = normalizeHostName(candidate);
+            if (looksLikeHostname(host) && host !== pageHost) return host;
+        }
+    }
+
+    return pageHost || '';
+}
+
+function refreshHostFilterOptions() {
+    const select = document.getElementById('hosting-filter');
+    if (!select) return;
+
+    const current = select.value || 'all';
+    const hosts = [...new Set(allVideos.map(v => getVideoHost(v)).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b));
+
+    select.innerHTML = `
+        <option value="all">Všetky hosty</option>
+        ${hosts.map(host => `<option value="${host}">${host}</option>`).join('')}
+    `;
+
+    select.value = hosts.includes(current) ? current : 'all';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('find-direct-btn')?.addEventListener('click', () => {
         startBackgroundResolution();
@@ -1435,6 +1572,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             applyFilters();
             isBackgroundResolving = false;
             updateStats();
+            if (allVideos.some(v => !v.directUrl)) {
+                await startBackgroundResolution();
+                applyFilters();
+                updateStats();
+            }
             return;
         }
 
@@ -1495,7 +1637,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (/pixeldrain\.com\/(u|[ld])\//i.test(tab.url)) {
                 document.getElementById('turbo-controls').style.display = 'none';
                 await handlePixeldrainScraping(tab);
-            } else if (tab.url.includes('leakporner.com')) {
+            } else if (isLeakLikeUrl(tab.url)) {
                 document.getElementById('turbo-controls').style.display = 'flex';
                 await handleLeakPornerScraping(tab);
             } else if (tab.url.includes('pornhoarder.io')) {
@@ -1668,7 +1810,8 @@ function showError(message) {
 }
 
 async function handleLeakPornerScraping(tab) {
-    console.log('LeakPorner scraping tab:', tab.id);
+    const siteLabel = isDjavUrl(tab.url) ? 'DJAV' : 'LeakPorner';
+    console.log(`${siteLabel} scraping tab:`, tab.id);
     document.getElementById('loader').style.display = 'flex';
     document.getElementById('video-grid').style.display = 'none';
 
@@ -1683,79 +1826,211 @@ async function handleLeakPornerScraping(tab) {
     try {
         const [{ result }] = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            func: async (limit) => {
+            func: async (limit, dashboardUrl, siteLabel) => {
+                const hostMatches = (href) => {
+                    const host = new URL(href).hostname.toLowerCase();
+                    return host === 'leakporner.com'
+                        || host.endsWith('.leakporner.com')
+                        || host === 'djav.org'
+                        || host.endsWith('.djav.org');
+                };
+
+                const normalizeEmbed = (rawUrl) => {
+                    let url = String(rawUrl || '').trim();
+                    if (!url) return '';
+                    if (url.startsWith('//')) url = `https:${url}`;
+                    if (!/^https?:\/\//i.test(url)) return '';
+                    if (url.includes('luluvids.top')) {
+                        url = url.replace('luluvids.top', 'luluvids.com').replace('/v/', '/e/');
+                    }
+                    return url;
+                };
+
+                const hostFromUrl = (rawUrl) => {
+                    const normalized = normalizeEmbed(rawUrl);
+                    if (!normalized) return '';
+                    try {
+                        return new URL(normalized).hostname.toLowerCase().replace(/^www\./, '');
+                    } catch {
+                        return '';
+                    }
+                };
+
+                const collectEmbeds = (doc) => {
+                    const seen = new Set();
+                    const embeds = [];
+                    doc.querySelectorAll('.servideo .change-video, .change-video').forEach(node => {
+                        const normalized = normalizeEmbed(node.getAttribute('data-embed'));
+                        if (normalized && !seen.has(normalized)) {
+                            seen.add(normalized);
+                            embeds.push(normalized);
+                        }
+                    });
+                    return embeds;
+                };
+
+                const normalizeThumb = (rawThumb, baseUrl) => {
+                    let thumbnail = String(rawThumb || '').trim();
+                    if (!thumbnail) return '';
+                    if (thumbnail.startsWith('//')) thumbnail = `https:${thumbnail}`;
+                    else if (thumbnail.startsWith('/')) thumbnail = new URL(thumbnail, baseUrl).href;
+                    if (thumbnail && (thumbnail.includes('58img.top') || thumbnail.includes('leakporner.com'))) {
+                        thumbnail = `${dashboardUrl}/api/v1/proxy?url=${encodeURIComponent(thumbnail)}`;
+                    }
+                    return thumbnail;
+                };
+
+                const isVideoPageUrl = (href) => {
+                    try {
+                        const u = new URL(href);
+                        if (!hostMatches(u.href)) return false;
+                        if (/^\/page\/\d+\/?$/i.test(u.pathname)) return false;
+                        if (u.pathname === '/' && u.search) return false;
+                        if (/^\/(?:tag|category|models?|pornstars?|search|author|filter)\//i.test(u.pathname)) return false;
+                        return true;
+                    } catch {
+                        return false;
+                    }
+                };
+
+                const pickCardLink = (container, baseUrl) => {
+                    const links = Array.from(container.querySelectorAll('a[href]'));
+                    for (const link of links) {
+                        const href = link.href || link.getAttribute('href') || '';
+                        const fullHref = href.startsWith('http') ? href : new URL(href, baseUrl).href;
+                        if (isVideoPageUrl(fullHref)) return { link, href: fullHref };
+                    }
+                    return null;
+                };
+
+                const findNextPageUrl = (doc, currentUrl) => {
+                    let currentPage = 1;
+                    try {
+                        const current = new URL(currentUrl);
+                        const match = current.pathname.match(/\/page\/(\d+)\/?$/i);
+                        currentPage = match ? parseInt(match[1], 10) : 1;
+                        const candidates = [];
+                        doc.querySelectorAll('a[href]').forEach((anchor) => {
+                            try {
+                                const target = new URL(anchor.href, current.href);
+                                if (!hostMatches(target.href)) return;
+                                const pageMatch = target.pathname.match(/\/page\/(\d+)\/?$/i);
+                                if (!pageMatch) return;
+                                const pageNum = parseInt(pageMatch[1], 10);
+                                if (!(pageNum > currentPage)) return;
+                                if (target.search !== current.search) return;
+                                candidates.push({ pageNum, href: target.href });
+                            } catch {}
+                        });
+                        candidates.sort((a, b) => a.pageNum - b.pageNum);
+                        return candidates[0]?.href || '';
+                    } catch {
+                        return '';
+                    }
+                };
+
                 const extractFromDoc = (doc, baseUrl) => {
-                    // LISTING PAGE — cards with article.loop-video
-                    const containers = doc.querySelectorAll('article.loop-video, .loop-video');
+                    const containers = doc.querySelectorAll(
+                        'article.loop-video, article.thumb-block, article.post, main.site-main article, section.content-area article'
+                    );
                     const videos = Array.from(containers).map(container => {
-                        const link = container.querySelector('a[href]');
-                        if (!link) return null;
+                        const entry = pickCardLink(container, baseUrl);
+                        if (!entry) return null;
+                        const { link, href: videoUrl } = entry;
                         const title = link.getAttribute('data-title') ||
                                       link.getAttribute('title') ||
-                                      container.querySelector('.entry-header span')?.innerText?.trim() ||
+                                      container.querySelector('.entry-header span, .entry-title, h2, h3')?.innerText?.trim() ||
+                                      container.querySelector('img')?.getAttribute('alt') ||
                                       'LeakPorner Video';
                         const img = container.querySelector('img');
-                        let thumbnail = img?.getAttribute('data-src') || img?.src || '';
-                        if (thumbnail.startsWith('//')) thumbnail = 'https:' + thumbnail;
-                        
-                        // Proxy thumbnail if it's from a known problematic domain
-                        if (thumbnail && (thumbnail.includes('58img.top') || thumbnail.includes('leakporner.com'))) {
-                            thumbnail = `${DASHBOARD_URL}/api/v1/proxy?url=${encodeURIComponent(thumbnail)}`;
-                        }
-
-                        const duration = container.querySelector('.duration')?.innerText?.replace(/\s+/g, '').trim() || '';
-                        let videoUrl = link.href;
-                        if (!videoUrl.startsWith('http')) videoUrl = new URL(videoUrl, baseUrl).href;
-                        return { id: videoUrl, title, url: videoUrl, source_url: videoUrl, thumbnail, duration, quality: '720p', size: 0 };
-                    }).filter(v => v && v.url && v.url.includes('leakporner.com'));
+                        const thumbnail = normalizeThumb(
+                            img?.getAttribute('data-src') ||
+                            img?.getAttribute('data-original') ||
+                            img?.getAttribute('data-lazy-src') ||
+                            img?.src || '',
+                            baseUrl
+                        );
+                        const duration = container.querySelector('.duration, .meta-duration, time')?.innerText?.replace(/\s+/g, '').trim() || '';
+                        return {
+                            id: videoUrl,
+                            title,
+                            url: videoUrl,
+                            source_url: videoUrl,
+                            page_host: hostFromUrl(videoUrl),
+                            thumbnail,
+                            duration,
+                            quality: '720p',
+                            size: 0,
+                        };
+                    }).filter(v => v && isVideoPageUrl(v.url));
 
                     // SINGLE VIDEO PAGE — extract embed URLs from player selector
                     if (videos.length === 0) {
                         const singleTitle = doc.querySelector('h1.entry-title')?.innerText?.trim() ||
                                             doc.querySelector('meta[property="og:title"]')?.content ||
-                                            doc.title.replace(' - LeakPorner', '').trim();
-                        let singleThumb = doc.querySelector('meta[property="og:image"]')?.content ||
-                                            doc.querySelector('.vi-on')?.getAttribute('data-thum') || '';
-                        if (singleThumb && (singleThumb.includes('58img.top') || singleThumb.includes('leakporner.com'))) {
-                            singleThumb = `${DASHBOARD_URL}/api/v1/proxy?url=${encodeURIComponent(singleThumb)}`;
-                        }
-                        const embeds = Array.from(doc.querySelectorAll('.servideo .change-video, .change-video'))
-                            .map(s => s.getAttribute('data-embed')).filter(Boolean);
+                                      doc.title.replace(/\s-\s(?:LeakPorner|DJAV)$/i, '').trim();
+                        const singleThumb = normalizeThumb(
+                            doc.querySelector('meta[property="og:image"]')?.content ||
+                            doc.querySelector('.vi-on')?.getAttribute('data-thum') || '',
+                            baseUrl
+                        );
+                        const embeds = collectEmbeds(doc);
                         if (embeds.length > 0) {
-                            videos.push({ id: baseUrl, title: singleTitle, url: embeds[0], source_url: baseUrl,
-                                thumbnail: singleThumb, quality: '720p', duration: '', embeds, size: 0 });
+                            videos.push({
+                                id: baseUrl,
+                                title: singleTitle,
+                                url: embeds[0],
+                                source_url: baseUrl,
+                                page_host: hostFromUrl(baseUrl),
+                                playback_host: hostFromUrl(embeds[0]),
+                                thumbnail: singleThumb,
+                                quality: '720p',
+                                duration: '',
+                                embeds,
+                                size: 0,
+                            });
                         }
                     }
                     return videos;
                 };
 
-                let allResults = extractFromDoc(document, window.location.href);
+                let allResults = [];
+                let currentDoc = document;
+                let currentUrl = window.location.href;
+                const visitedPages = new Set();
 
-                if (limit > 1 && allResults.length > 0) {
-                    const cleanBase = window.location.href.split(/\/page\/\d+/)[0].replace(/\/$/, '');
-                    const fetchPage = async (n) => {
-                        try {
-                            const r = await fetch(`${cleanBase}/page/${n}/`);
-                            if (!r.ok) return [];
-                            return extractFromDoc(new DOMParser().parseFromString(await r.text(), 'text/html'), `${cleanBase}/page/${n}/`);
-                        } catch (e) { return []; }
-                    };
-                    const extras = await Promise.all(Array.from({ length: limit - 1 }, (_, i) => fetchPage(i + 2)));
-                    extras.forEach(r => { allResults = allResults.concat(r); });
+                for (let i = 0; i < limit && currentDoc && currentUrl && !visitedPages.has(currentUrl); i += 1) {
+                    visitedPages.add(currentUrl);
+                    allResults = allResults.concat(extractFromDoc(currentDoc, currentUrl));
+                    const nextUrl = findNextPageUrl(currentDoc, currentUrl);
+                    if (!nextUrl || visitedPages.has(nextUrl)) break;
+                    try {
+                        const response = await fetch(nextUrl, { credentials: 'include' });
+                        if (!response.ok) break;
+                        currentUrl = nextUrl;
+                        currentDoc = new DOMParser().parseFromString(await response.text(), 'text/html');
+                    } catch (e) {
+                        break;
+                    }
                 }
 
                 const seen = new Set();
                 return allResults.filter(v => { if (!v || !v.url || seen.has(v.url)) return false; seen.add(v.url); return true; });
             },
-            args: [pageLimit]
+            args: [pageLimit, DASHBOARD_URL, siteLabel]
         });
 
         allVideos = (result || []).filter(v => v && v.url);
         currentlyFilteredVideos = [...allVideos];
         const folderEl = document.getElementById('folder-name');
-        if (folderEl) folderEl.innerText = 'LeakPorner Explorer';
+        if (folderEl) folderEl.innerText = `${siteLabel} Explorer`;
         applyFilters();
         updateStats();
+
+        if (allVideos.some(v => !v.directUrl)) {
+            await startBackgroundResolution();
+            applyFilters();
+        }
 
         if (autoSend && allVideos.length > 0) {
             const toImport = allVideos.map(v => ({ title: v.title, url: v.url, source_url: v.source_url,
@@ -1763,12 +2038,12 @@ async function handleLeakPornerScraping(tab) {
             fetch(`${DASHBOARD_URL}/api/v1/import/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ batch_name: `LeakPorner ${isDeep ? 'Deep' : isTurbo ? 'Turbo' : 'Import'} ${new Date().toLocaleDateString()}`, videos: toImport })
+                body: JSON.stringify({ batch_name: `${siteLabel} ${isDeep ? 'Deep' : isTurbo ? 'Turbo' : 'Import'} ${new Date().toLocaleDateString()}`, videos: toImport })
             }).catch(err => console.error('LeakPorner auto-send failed', err));
         }
     } catch (err) {
         console.error('handleLeakPornerScraping', err);
-        showError('LeakPorner: ' + err.message);
+        showError(siteLabel + ': ' + err.message);
     }
 }
 
@@ -4696,6 +4971,11 @@ function renderGrid(videos) {
                 ? (typeof video.duration === 'number' ? formatTime(video.duration) : video.duration)
                 : '';
             const qualityLabel = video.resolution || (video.quality && video.quality !== 'HD' ? String(video.quality).toUpperCase() : '');
+            const hostLabel = getVideoHost(video);
+            const pageHostLabel = getPageHost(video);
+            const hostTooltip = pageHostLabel && pageHostLabel !== hostLabel
+                ? `Stream: ${hostLabel} | Page: ${pageHostLabel}`
+                : `Host: ${hostLabel}`;
             const smartMetaBits = [
                 qualityLabel,
                 durDisplay || '',
@@ -4716,6 +4996,7 @@ function renderGrid(videos) {
                     <div class="title" title="${video.title}">${video.title}</div>
                     <div class="meta-info">
                         <span class="quality-badge">${video.quality || 'HD'}</span>
+                        ${hostLabel ? `<span class="host-badge" title="${hostTooltip}">${hostLabel}</span>` : ''}
                         ${durDisplay ? `<span class="duration">🕒 ${durDisplay}</span>` : ''}
                         ${video.views ? `<span style="opacity:0.65;font-size:0.7rem;">👁 ${formatViews(video.views)}</span>` : ''}
                         ${video.size > 0 ? `<span class="file-size">${(video.size/1048576).toFixed(1)} MB</span>` : ''}
@@ -4909,6 +5190,9 @@ async function startBackgroundResolution() {
     isBackgroundResolving = true;
     updateStats(); // Hide the button
 
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTabId = activeTab?.id || null;
+
     if (backgroundResolveAbortController) {
         backgroundResolveAbortController.abort();
     }
@@ -4922,7 +5206,9 @@ async function startBackgroundResolution() {
     let foundCount = 0;
     const toResolve = allVideos.filter(v => !v.directUrl);
     if (toResolve.length === 0) {
+        isBackgroundResolving = false;
         if (bgStats) bgStats.style.display = 'none';
+        updateStats();
         return;
     }
 
@@ -4938,7 +5224,7 @@ async function startBackgroundResolution() {
 
             try {
                 let direct = null;
-                const url = video.url || video.source_url;
+                const url = video.source_url || video.url;
 
                 // 1. Check if already captured in background.js
                 const captured = await new Promise(resolve => {
@@ -4951,6 +5237,12 @@ async function startBackgroundResolution() {
                     direct = captured;
                 } else {
                     // 2. Site specific logic
+                    if (/(?:leakporner\.com|djav\.org)/i.test(video.source_url || '') || /(?:leakporner\.com|djav\.org)/i.test(video.url || '')) {
+                        direct = await resolveLeakLikeDirectUrlInTab(activeTabId, video.source_url || video.url);
+                        if (!direct) {
+                            direct = await resolveLeakLikeDirectViaBackend(video.source_url || video.url);
+                        }
+                    } else
                     if (/noodlemagazine\.com/i.test(url)) {
                         const meta = await resolveNoodleMetadata(url);
                         if (meta?.directUrl) direct = meta.directUrl;
@@ -4980,9 +5272,19 @@ async function startBackgroundResolution() {
 
                 if (direct && direct !== url) {
                     video.directUrl = direct;
+                    try {
+                        video.playback_host = normalizeHostName(new URL(direct, location.href).hostname);
+                    } catch {}
                     // Update the video in allVideos as well (redundant but safe)
                     const original = allVideos.find(v => v.id === video.id);
-                    if (original) original.directUrl = direct;
+                    if (original) {
+                        original.directUrl = direct;
+                        if (!original.playback_host) {
+                            try {
+                                original.playback_host = normalizeHostName(new URL(direct, location.href).hostname);
+                            } catch {}
+                        }
+                    }
                     
                     // Partial UI Update: find the card by data-id and add class
                     try {
@@ -5112,6 +5414,201 @@ async function resolveFullpornerDirectUrl(watchUrl) {
     return finalUrl;
 }
 
+async function resolveLeakLikeDirectUrlInTab(tabId, watchUrl) {
+    if (!tabId || !watchUrl || !/(?:leakporner\.com|djav\.org)/i.test(watchUrl)) return null;
+    try {
+        const results = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: async (u) => {
+                const isPlayable = (raw) => /\.(m3u8|mp4|webm|m4v)(\?|$)/i.test(String(raw || ''));
+                const norm = (raw) => {
+                    const s = String(raw || '').trim();
+                    if (!s) return '';
+                    if (s.startsWith('//')) return `https:${s}`;
+                    return s;
+                };
+                const decodeB64Url = (raw) => {
+                    const text = String(raw || '').trim().replace(/-/g, '+').replace(/_/g, '/');
+                    const padded = text + '='.repeat((4 - (text.length % 4 || 4)) % 4);
+                    const bin = atob(padded);
+                    const out = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+                    return out;
+                };
+                const concatBytes = (parts) => {
+                    const total = parts.reduce((acc, p) => acc + p.length, 0);
+                    const out = new Uint8Array(total);
+                    let offset = 0;
+                    for (const p of parts) {
+                        out.set(p, offset);
+                        offset += p.length;
+                    }
+                    return out;
+                };
+                const resolveBysePlayback = async (embedUrl) => {
+                    try {
+                        const m = String(embedUrl || '').match(/\/(?:e|kpw)\/([a-zA-Z0-9_-]+)/);
+                        if (!m) return null;
+                        const code = m[1];
+                        const apiUrl = `https://bysezoxexe.com/api/videos/${code}/embed/playback`;
+                        const resp = await fetch(apiUrl, {
+                            credentials: 'omit',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Referer': 'https://w12.leakporner.com/',
+                                'Origin': 'https://bysezoxexe.com',
+                            },
+                        });
+                        if (!resp.ok) return null;
+                        const data = await resp.json();
+                        const playback = data?.playback || {};
+                        const keyParts = Array.isArray(playback.key_parts) ? playback.key_parts : [];
+                        const iv = playback.iv || '';
+                        const payload = playback.payload || '';
+                        if (!keyParts.length || !iv || !payload) return null;
+
+                        const keyRaw = concatBytes(keyParts.map((p) => decodeB64Url(p)));
+                        const nonce = decodeB64Url(iv);
+                        const ciphertext = decodeB64Url(payload);
+                        const cryptoKey = await crypto.subtle.importKey('raw', keyRaw, { name: 'AES-GCM' }, false, ['decrypt']);
+                        const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, cryptoKey, ciphertext);
+                        const plainJson = JSON.parse(new TextDecoder().decode(new Uint8Array(plainBuf)));
+                        const sources = Array.isArray(plainJson?.sources) ? plainJson.sources : [];
+                        if (!sources.length) return null;
+                        const sorted = sources
+                            .map((s) => ({
+                                url: String(s?.url || '').trim(),
+                                bitrate: Number(s?.bitrate_kbps || 0),
+                                height: Number(s?.height || 0),
+                            }))
+                            .filter((s) => !!s.url)
+                            .sort((a, b) => {
+                                const aPlayable = isPlayable(a.url) ? 1 : 0;
+                                const bPlayable = isPlayable(b.url) ? 1 : 0;
+                                if (aPlayable !== bPlayable) return bPlayable - aPlayable;
+                                if (a.bitrate !== b.bitrate) return b.bitrate - a.bitrate;
+                                return b.height - a.height;
+                            });
+                        const best = sorted.find((s) => isPlayable(s.url));
+                        return best?.url || null;
+                    } catch {
+                        return null;
+                    }
+                };
+                const collectEmbedsFromHtml = (html, baseUrl) => {
+                    const out = [];
+                    const seen = new Set();
+                    const push = (raw) => {
+                        const n = norm(raw);
+                        if (!n) return;
+                        try {
+                            const abs = new URL(n, baseUrl).href;
+                            if (seen.has(abs)) return;
+                            seen.add(abs);
+                            out.push(abs);
+                        } catch {}
+                    };
+                    try {
+                        const doc = new DOMParser().parseFromString(html || '', 'text/html');
+                        doc.querySelectorAll('.servideo .change-video, .change-video').forEach((el) => push(el.getAttribute('data-embed')));
+                    } catch {}
+                    const re = /data-embed=["']([^"']+)["']/gi;
+                    for (const m of String(html || '').matchAll(re)) push(m[1]);
+                    return out;
+                };
+                const extract = (html, baseUrl) => {
+                    if (!html) return null;
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    const nodes = Array.from(doc.querySelectorAll('video source[src], source[src], video[src], meta[property="og:video"], meta[property="og:video:url"], meta[property="og:video:secure_url"]'));
+                    for (const node of nodes) {
+                        const raw = node.getAttribute?.('src') || node.getAttribute?.('content') || node.src || '';
+                        if (!raw) continue;
+                        try {
+                            const abs = new URL(norm(raw), baseUrl).href;
+                            if (/^blob:/i.test(abs) || /^data:/i.test(abs)) continue;
+                            if (isPlayable(abs)) return abs;
+                        } catch {}
+                    }
+                    const re = /https?:\/\/[^"'\\\s<>]+?\.(?:m3u8|mp4|webm|m4v)(?:\?[^"'\\\s<>]*)?/gi;
+                    const matches = String(html).match(re) || [];
+                    return matches.length ? matches[0] : null;
+                };
+                const fetchHtml = async (urlToFetch, referer) => {
+                    try {
+                        const resp = await fetch(urlToFetch, {
+                            credentials: 'include',
+                            headers: referer ? { Referer: referer } : undefined,
+                        });
+                        if (!resp.ok) return null;
+                        return await resp.text();
+                    } catch {
+                        return null;
+                    }
+                };
+
+                const html = await fetchHtml(u, location.href);
+                if (!html) return null;
+                let resolved = extract(html, u);
+                if (resolved && isPlayable(resolved)) return resolved;
+
+                const embeds = collectEmbedsFromHtml(html, u);
+                for (const embed of embeds.slice(0, 5)) {
+                    if (/(?:bysezoxexe\.com|398fitus\.com)/i.test(embed)) {
+                        const byse = await resolveBysePlayback(embed);
+                        if (byse && isPlayable(byse)) return byse;
+                    }
+                    const embedHtml = await fetchHtml(embed, u);
+                    const fromEmbed = extract(embedHtml, embed);
+                    if (fromEmbed && isPlayable(fromEmbed)) return fromEmbed;
+                }
+
+                try {
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    const iframe = doc.querySelector('iframe[src]');
+                    const iframeSrc = iframe?.getAttribute('src') || '';
+                    if (iframeSrc) {
+                        const iframeUrl = new URL(norm(iframeSrc), u).href;
+                        const iframeHtml = await fetchHtml(iframeUrl, u);
+                        const fromIframe = extract(iframeHtml, iframeUrl);
+                        if (fromIframe && isPlayable(fromIframe)) return fromIframe;
+                    }
+                } catch {}
+
+                return null;
+            },
+            args: [watchUrl],
+        });
+        return results?.[0]?.result || null;
+    } catch (e) {
+        console.warn('resolveLeakLikeDirectUrlInTab failed', watchUrl, e);
+        return null;
+    }
+}
+
+async function resolveLeakLikeDirectViaBackend(watchUrl) {
+    try {
+        if (!watchUrl || !/(?:leakporner\.com|djav\.org)/i.test(String(watchUrl))) return null;
+        const source = /djav\.org/i.test(String(watchUrl)) ? 'djav' : 'leakporner';
+        const resp = await fetch(`${DASHBOARD_URL}/api/v1/videos/update_stream`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_url: watchUrl,
+                stream_url: watchUrl,
+                source,
+                title: '',
+            }),
+        });
+        if (!resp.ok) return null;
+        const data = await resp.json().catch(() => null);
+        const candidate = String(data?.stream_url || '').trim();
+        return /\.(m3u8|mp4|webm|m4v)(\?|$)/i.test(candidate) ? candidate : null;
+    } catch (e) {
+        console.warn('resolveLeakLikeDirectViaBackend failed', watchUrl, e);
+        return null;
+    }
+}
+
 async function resolveFullpornerDirectUrlsInTab(tabId, watchUrls, onProgress) {
     const urls = Array.from(new Set((watchUrls || []).filter(u => /fullporner\.com\/watch\//i.test(String(u || '')))));
     if (!tabId || urls.length === 0) return {};
@@ -5195,11 +5692,16 @@ function applyFilters() {
     const maxDur = parseFloat(document.getElementById('max-duration')?.value || '0') * 60;
     const qualityFilter = document.getElementById('quality-filter')?.value || 'all';
 
+    refreshHostFilterOptions();
+    const hostingFilter = document.getElementById('hosting-filter')?.value || 'all';
+
     let filtered = allVideos.filter(v => {
         if (searchQuery && !v.title?.toLowerCase().includes(searchQuery)) return false;
         const dur = typeof v.duration === 'number' ? v.duration : parseDuration(v.duration);
         if (minDur > 0 && dur < minDur) return false;
         if (maxDur > 0 && dur > maxDur) return false;
+        const host = getVideoHost(v);
+        if (hostingFilter !== 'all' && host !== hostingFilter) return false;
         if (qualityFilter !== 'all') {
             const q = (v.quality || '').toLowerCase();
             if (qualityFilter === '4K' && !q.includes('4k') && !q.includes('2160')) return false;
@@ -5235,7 +5737,7 @@ function applyFilters() {
 }
 
 // Filter listeners
-['search-input', 'sort-select', 'min-duration', 'max-duration', 'quality-filter'].forEach(id => {
+['search-input', 'sort-select', 'min-duration', 'max-duration', 'quality-filter', 'hosting-filter'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', applyFilters);
     document.getElementById(id)?.addEventListener('change', applyFilters);
 });
@@ -5771,6 +6273,28 @@ async function handleThotsTvScraping(tab) {
                     if (!src || /^blob:/i.test(src)) return '';
                     return src;
                 };
+                const directFromHtml = (html, baseUrl) => {
+                    if (!html) return '';
+                    const patterns = [
+                        /<source[^>]+src=["']([^"']+\.(?:mp4|m3u8|webm|m4v)(?:\?[^"']*)?)["'][^>]*>/i,
+                        /<video[^>]+src=["']([^"']+\.(?:mp4|m3u8|webm|m4v)(?:\?[^"']*)?)["'][^>]*>/i,
+                        /<iframe[^>]+src=["']([^"']+)["'][^>]*>/i,
+                        /https?:\/\/[^"'\\\s<>]+?\.(?:mp4|m3u8|webm|m4v)(?:\?[^"'\\\s<>]*)?/i,
+                    ];
+                    for (const pat of patterns) {
+                        const m = String(html).match(pat);
+                        if (!m) continue;
+                        const raw = m[1] || m[0] || '';
+                        try {
+                            const abs = new URL(raw, baseUrl).href;
+                            if (/^blob:/i.test(abs)) continue;
+                            return abs;
+                        } catch {
+                            if (raw && !/^blob:/i.test(raw)) return raw;
+                        }
+                    }
+                    return '';
+                };
                 const extractFromDoc = (doc, baseUrl) => {
                     const out = [];
                     const seen = new Set();
@@ -5801,8 +6325,14 @@ async function handleThotsTvScraping(tab) {
                     return out;
                 };
 
-                // Single video/detail page: prefer direct stream from <video>.
-                const directNow = directFromDocument(document, location.href);
+                // Single video/detail page: prefer raw HTML direct stream before blob playback.
+                let rawPageHtml = '';
+                try {
+                    const resp = await fetch(location.href, { credentials: 'include' });
+                    if (resp.ok) rawPageHtml = await resp.text();
+                } catch {}
+
+                const directNow = directFromDocument(document, location.href) || directFromHtml(rawPageHtml, location.href);
                 if (directNow) {
                     const pageTitle =
                         document.querySelector('h1,.video-title,h2')?.textContent?.trim() ||

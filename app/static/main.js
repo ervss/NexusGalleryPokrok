@@ -2571,6 +2571,7 @@ function createPlayerModule() {
 
             const sourceUrlLower = (video.source_url || '').toLowerCase();
             const isPornhoarder = sourceUrlLower.includes('pornhoarder.');
+            const isLeakLike = sourceUrlLower.includes('leakporner.') || sourceUrlLower.includes('djav.org');
             const directHlsUrl = video.url && video.url.startsWith('http') ? video.url : null;
 
             if (isWebshare) {
@@ -2589,8 +2590,9 @@ function createPlayerModule() {
                 src = `/api/v1/videos/${video.id}/stream`;
                 console.log(`[Player ${playerIdx}] Using native browser playback for local file via stream endpoint.`);
             } else if (isHls && directHlsUrl) {
-                // PH HLS providers often block server-side proxy requests with 403.
-                // For PH streams, prefer direct HLS playback in browser.
+                // Some providers need direct HLS playback, but LeakPorner/DJAV
+                // must stay proxied because the browser blocks the raw manifest
+                // on CORS before Hls.js can resolve the segments.
                 if (isPornhoarder) {
                     src = directHlsUrl;
                     console.log(`[Player ${playerIdx}] Using direct HLS URL for PornHoarder stream`);
@@ -2623,23 +2625,44 @@ function createPlayerModule() {
                 if (playerIdx === 0) this.hls1 = hls;
                 else this.hls2 = hls;
 
+                const safePlay = () => {
+                    if (!this.settings.autoplay) return;
+                    const playPromise = videoRef.play();
+                    if (playPromise && typeof playPromise.catch === 'function') {
+                        playPromise.catch((err) => {
+                            if (!err || err.name !== 'AbortError') {
+                                console.warn(`[HLS ${playerIdx}] play() failed:`, err);
+                            }
+                        });
+                    }
+                };
+
                 hls.loadSource(src);
                 hls.attachMedia(videoRef);
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    if (this.settings.autoplay) videoRef.play();
+                    safePlay();
                 });
                 hls.on(Hls.Events.ERROR, function (event, data) {
                     if (data.fatal) {
                         console.error(`[HLS ${playerIdx}] Fatal Error:`, data);
                         // Fallback: if proxy URL failed, retry once with direct HLS URL.
-                        if (src && src.startsWith('/hls_proxy') && directHlsUrl) {
+                        if (src && src.startsWith('/hls_proxy') && directHlsUrl && !isLeakLike) {
                             try {
+                                hls.stopLoad();
                                 hls.destroy();
                             } catch (_) {}
+                            videoRef.pause();
                             videoRef.src = directHlsUrl;
                             videoRef.load();
                             videoRef.addEventListener('canplay', () => {
-                                if (this.settings.autoplay) videoRef.play();
+                                const playPromise = this.settings.autoplay ? videoRef.play() : null;
+                                if (playPromise && typeof playPromise.catch === 'function') {
+                                    playPromise.catch((err) => {
+                                        if (!err || err.name !== 'AbortError') {
+                                            console.warn(`[HLS ${playerIdx}] direct fallback play() failed:`, err);
+                                        }
+                                    });
+                                }
                             }, { once: true });
                             console.warn(`[HLS ${playerIdx}] Retrying with direct HLS URL after proxy fatal.`);
                         }
@@ -2650,7 +2673,14 @@ function createPlayerModule() {
                 videoRef.src = src;
                 videoRef.load();
                 videoRef.addEventListener('canplay', () => {
-                    if (this.settings.autoplay) videoRef.play();
+                    const playPromise = this.settings.autoplay ? videoRef.play() : null;
+                    if (playPromise && typeof playPromise.catch === 'function') {
+                        playPromise.catch((err) => {
+                            if (!err || err.name !== 'AbortError') {
+                                console.warn(`[Player ${playerIdx}] play() failed:`, err);
+                            }
+                        });
+                    }
                 }, { once: true });
             }
 

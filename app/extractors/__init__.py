@@ -13,6 +13,7 @@ from .pornhoarder import PornHoarderExtractor
 from .archivebate import ArchivebateExtractor
 from .recurbate import RecurbateExtractor
 from .noodlemagazine import NoodleMagazineExtractor
+from .thotstv import ThotsTvExtractor
 
 
 def init_registry():
@@ -45,6 +46,8 @@ def init_registry():
         ExtractorRegistry.register(RecurbateExtractor())
     if "NoodleMagazine" not in existing_names:
         ExtractorRegistry.register(NoodleMagazineExtractor())
+    if "ThotsTv" not in existing_names:
+        ExtractorRegistry.register(ThotsTvExtractor())
 
 
 def register_extended_extractors():

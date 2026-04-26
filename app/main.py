@@ -37,6 +37,7 @@ from contextlib import asynccontextmanager
 from .services import VIPVideoProcessor, search_videos_by_subtitle, get_batch_stats, get_tags_stats, get_quality_stats, extract_playlist_urls, fetch_eporner_videos, scrape_eporner_discovery
 from .porntrex_discovery import scrape_porntrex_discovery
 from .whoreshub_discovery import scrape_whoreshub_discovery
+from .leakporner_discovery import scrape_leakporner_discovery
 from .search_engine import ExternalSearchEngine
 from .websockets import manager
 import collections
@@ -75,9 +76,37 @@ if sys.platform == 'win32':
 http_session = None
 # Env reload trigger 3
 
+_PLACEHOLDER_JPG_PATH = os.path.join("app", "static", "placeholder.jpg")
+_PLACEHOLDER_JPG_B64 = (
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBUQEBAVFRUVFRUVFRUVFRUVFRUVFRUWFhUV"
+    "FRUYHSggGBolHRUVITEhJSkrLi4uFx8zODMsNygtLisBCgoKDg0OGxAQGy0lICYtLS0tLS0tLS0t"
+    "LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAQMBIgACEQEDEQH/"
+    "xAAXAAEBAQEAAAAAAAAAAAAAAAAAAQID/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQ"
+    "AxAAAAHhAqf/xAAbEAADAQEBAQEAAAAAAAAAAAABAhEDEiExQf/aAAgBAQABBQJrM8qS2g1K8VxP"
+    "x//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/"
+    "2gAIAQIBAT8BP//EABwQAAICAgMBAAAAAAAAAAAAAAECEQMhMUFREv/aAAgBAQAGPwLQ0bA0XJY7"
+    "vT//xAAaEAACAwEBAAAAAAAAAAAAAAABEQAhMUFh/9oACAEBAAE/ITqFpnHzV0p2N1cXv//aAAwD"
+    "AQACAAMAAAAQ8//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAA"
+    "AAAAAAAAABD/2gAIAQIBAT8QP//EABwQAQACAgMBAAAAAAAAAAAAAAERIQAxQVFhcf/aAAgBAQAB"
+    "PxBklx6wvLhTjD3l0C4i6msYu//Z"
+)
+
+
+def _ensure_static_placeholder_assets() -> None:
+    try:
+        placeholder_dir = os.path.dirname(_PLACEHOLDER_JPG_PATH)
+        os.makedirs(placeholder_dir, exist_ok=True)
+        if not os.path.exists(_PLACEHOLDER_JPG_PATH) or os.path.getsize(_PLACEHOLDER_JPG_PATH) == 0:
+            with open(_PLACEHOLDER_JPG_PATH, "wb") as handle:
+                handle.write(base64.b64decode(_PLACEHOLDER_JPG_B64))
+            logging.info("Created missing static placeholder asset at %s", _PLACEHOLDER_JPG_PATH)
+    except Exception as exc:
+        logging.warning("Failed to ensure static placeholder asset: %s", exc)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global http_session
+    _ensure_static_placeholder_assets()
     # Increase limits for many concurrent video streams
     # Use a robust resolver to handle domains with DNS issues (like nsfwclips.co)
     # Falls back to default resolver if aiodns/pycares DLL is blocked by OS policy
@@ -494,6 +523,14 @@ class WhoresHubDiscoveryRequest(BaseModel):
     batch_name: Optional[str] = None
 
 
+class LeakPornerDiscoveryRequest(BaseModel):
+    keyword: str = ""
+    pages: int = 1
+    min_duration: int = 0
+    sort: str = "latest"
+    batch_name: Optional[str] = None
+
+
 class TelegramLoginRequest(BaseModel):
     api_id: str
     api_hash: str
@@ -637,8 +674,10 @@ async def pornhoarder_update_stream(payload: dict, db: Session = Depends(get_db)
             pass
         return ""
 
-    if not source_url or not stream_url:
+    if not source_url:
         return {"status": "error", "message": "missing fields"}
+    if not stream_url:
+        stream_url = source_url
 
     def _looks_like_stream(url: str) -> bool:
         u = (url or "").strip().lower()
@@ -659,11 +698,14 @@ async def pornhoarder_update_stream(payload: dict, db: Session = Depends(get_db)
     # For browser-captured providers, try extractor once:
     # - resolves non-playable captures/player URLs to direct streams
     # - fills metadata for clean dashboard cards.
-    if source in ("pornhoarder", "recurbate"):
+    if source in ("pornhoarder", "recurbate", "leakporner", "djav"):
         try:
             if source == "pornhoarder":
                 from .extractors.pornhoarder import PornHoarderExtractor
                 extractor = PornHoarderExtractor()
+            elif source in ("leakporner", "djav"):
+                from .extractors.leakporner import LeakPornerExtractor
+                extractor = LeakPornerExtractor()
             else:
                 from .extractors.recurbate import RecurbateExtractor
                 extractor = RecurbateExtractor()
@@ -726,7 +768,7 @@ async def pornhoarder_update_stream(payload: dict, db: Session = Depends(get_db)
         # Ensure preview thumbnail is generated for interceptor-only entries.
         if not video.thumbnail_path:
             _queue_thumbnail_processing(video.id)
-        return {"status": "ok", "video_id": video.id}
+        return {"status": "ok", "video_id": video.id, "stream_url": resolved_stream}
     logging.info(f"[PH-Interceptor] No video found for source_url, creating new one: {source_url}")
     new_video = Video(
         title=resolved_title or _title_from_source(source_url) or f"{source.capitalize()} Video",
@@ -746,7 +788,7 @@ async def pornhoarder_update_stream(payload: dict, db: Session = Depends(get_db)
     db.commit()
     db.refresh(new_video)
     _queue_thumbnail_processing(new_video.id)
-    return {"status": "created", "video_id": new_video.id}
+    return {"status": "created", "video_id": new_video.id, "stream_url": resolved_stream}
 
 
 @app.get("/health")
@@ -3934,6 +3976,98 @@ async def whoreshub_discovery_import(
         )
 
 
+@api_v1_router.post("/import/leakporner_discovery")
+@api_legacy_router.post("/import/leakporner_discovery")
+async def leakporner_discovery(data: LeakPornerDiscoveryRequest):
+    """
+    LeakPorner Discovery - Scrapes listing pages and returns preview results.
+    """
+    try:
+        results = await asyncio.to_thread(
+            scrape_leakporner_discovery,
+            keyword=data.keyword,
+            pages=data.pages,
+            min_duration=data.min_duration,
+            sort=data.sort,
+        )
+
+        return {
+            "status": "success",
+            "results": results,
+            "total": len(results),
+            "matched": len(results),
+            "keyword": data.keyword or "latest",
+            "min_duration": data.min_duration,
+            "sort": data.sort,
+        }
+    except Exception as e:
+        logging.error(f"[LEAKPORNER_DISCOVERY] Endpoint error: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+@api_v1_router.post("/import/leakporner_discovery/import")
+@api_legacy_router.post("/import/leakporner_discovery/import")
+async def leakporner_discovery_import(
+    bg_tasks: BackgroundTasks,
+    selected_urls: List[str] = Body(...),
+    batch_name: Optional[str] = Body(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Import selected videos from LeakPorner Discovery results.
+    Accepts a list of video page URLs to import.
+    """
+    try:
+        batch = batch_name or f"LeakPorner Discovery {datetime.datetime.now().strftime('%d.%m %H:%M')}"
+        new_ids = []
+
+        for url in selected_urls:
+            if not url or not url.startswith('http'):
+                continue
+
+            existing = db.query(Video).filter(Video.url == url).first()
+            if existing:
+                logging.info(f"[LEAKPORNER_DISCOVERY_IMPORT] Skipping duplicate: {url}")
+                continue
+
+            video = Video(
+                title="Queued...",
+                url=url,
+                source_url=url,
+                batch_name=batch,
+                status="pending",
+                created_at=datetime.datetime.utcnow()
+            )
+            db.add(video)
+            db.flush()
+            new_ids.append(video.id)
+
+        db.commit()
+
+        if new_ids:
+            processor = VIPVideoProcessor()
+            bg_tasks.add_task(processor.process_batch, new_ids)
+
+        logging.info(f"[LEAKPORNER_DISCOVERY_IMPORT] Queued {len(new_ids)} videos for import")
+
+        return {
+            "status": "success",
+            "count": len(new_ids),
+            "batch": batch,
+            "message": f"Importing {len(new_ids)} videos from LeakPorner Discovery"
+        }
+    except Exception as e:
+        logging.error(f"[LEAKPORNER_DISCOVERY_IMPORT] Error: {e}", exc_info=True)
+        db.rollback()
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
 async def process_batch_import_with_filters(candidates: List[dict], batch: str, min_dur: int, min_res: int, only_vert: bool, disable_rejection: bool = False, is_reddit: bool = False, is_pornone: bool = False, debug: bool = False):
     """
     Background job to resolve metadata and add to DB with summary reporting.
@@ -4343,6 +4477,20 @@ async def proxy_video(video_id: str, request: Request, url: Optional[str] = None
     # --- OPTIMISTIC STREAMING (Fix for single-use tokens) ---
     range_header = request.headers.get('Range')
 
+    def _looks_like_hls_payload(stream_url: str, content_type: str) -> bool:
+        low_url = (stream_url or "").lower()
+        low_ctype = (content_type or "").lower()
+        if ".m3u8" in low_url:
+            return True
+        return any(
+            token in low_ctype
+            for token in (
+                "application/vnd.apple.mpegurl",
+                "application/x-mpegurl",
+                "audio/mpegurl",
+            )
+        )
+
     # --- CAMWHORES: rnd=<unix_ms> is required for many get_file URLs (extension always includes it).
     if "camwhores" in target_url and "get_file" in target_url:
         from .extractors.camwhores import normalize_camwhores_get_file_rnd
@@ -4519,9 +4667,12 @@ async def proxy_video(video_id: str, request: Request, url: Optional[str] = None
         content_type = ""
         if upstream_response is not None:
             content_type = (upstream_response.headers.get("Content-Type") or "").lower()
+            is_hls_payload = _looks_like_hls_payload(target_url, content_type)
             if not is_expired:
                 is_expired = upstream_response.status in [403, 410, 401, 404]
-            if 'na.mp4' in str(upstream_response.url) or (upstream_response.status == 200 and content_len < 100000):
+            if 'na.mp4' in str(upstream_response.url) or (
+                upstream_response.status == 200 and content_len < 100000 and not is_hls_payload
+            ):
                 is_expired = True
 
             # Eporner-specific expiration detection: 
@@ -4835,6 +4986,7 @@ async def proxy_video(video_id: str, request: Request, url: Optional[str] = None
                             )
                             candidate_len = int(candidate_resp.headers.get("Content-Length", "0") or 0)
                             candidate_ctype = (candidate_resp.headers.get("Content-Type") or "").lower()
+                            candidate_is_hls = _looks_like_hls_payload(new_url, candidate_ctype)
                             logging.info(
                                 "[CW-L2][%s] candidate probe → status=%s ctype=%s len=%s",
                                 cw_corr, candidate_resp.status, candidate_ctype, candidate_len,
@@ -4843,6 +4995,7 @@ async def proxy_video(video_id: str, request: Request, url: Optional[str] = None
                                 candidate_resp.status == 206
                                 or candidate_len >= 65536
                                 or "video/" in candidate_ctype
+                                or candidate_is_hls
                             )
                             if probe_ok:
                                 v.url = new_url

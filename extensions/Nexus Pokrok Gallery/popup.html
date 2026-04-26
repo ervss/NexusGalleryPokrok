@@ -504,6 +504,20 @@
             text-transform: uppercase;
             flex-shrink: 0;
         }
+        .host-badge {
+            font-size: 0.65rem;
+            background: rgba(255,255,255,0.08);
+            color: #c8f7ff;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-weight: 700;
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            flex-shrink: 0;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         .duration {
             font-size: 0.72rem;
             font-weight: 600;
@@ -732,6 +746,10 @@
                     <option value="1080p">1080p</option>
                     <option value="720p">720p</option>
                     <option value="SD">SD</option>
+                </select>
+                <span style="opacity:0.7;margin-left:8px;">Hosting:</span>
+                <select id="hosting-filter">
+                    <option value="all">Všetky hosty</option>
                 </select>
             </div>
 

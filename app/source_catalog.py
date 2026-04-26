@@ -21,6 +21,8 @@ DISCOVERY_SEARCH_SOURCE_KEYS = frozenset({
     "xhamster",
     "ixxx",
     "noodlemagazine",
+    "leakporner",
+    "djav",
 })
 
 SOURCE_KEY_ALIASES: Dict[str, str] = {
@@ -49,6 +51,10 @@ SOURCE_KEY_ALIASES: Dict[str, str] = {
     "www.ixxx.com": "ixxx",
     "noodlemagazine.com": "noodlemagazine",
     "nm": "noodlemagazine",
+    "leakporner.com": "leakporner",
+    "lp": "leakporner",
+    "djav.org": "djav",
+    "dj": "djav",
 }
 
 # API + discovery UI (id must be a canonical DISCOVERY_SEARCH_SOURCE_KEYS member)
@@ -65,6 +71,8 @@ DISCOVERY_SOURCE_OPTIONS: List[Dict[str, Any]] = [
     {"id": "spankbang", "label": "SpankBang", "has_search": True},
     {"id": "xhamster", "label": "xHamster", "has_search": True},
     {"id": "ixxx", "label": "iXXX", "has_search": True},
+    {"id": "leakporner", "label": "LeakPorner", "has_search": True},
+    {"id": "djav", "label": "DJAV", "has_search": True},
 ]
 
 # Extractors / playback without a dedicated row in DISCOVERY_SOURCE_OPTIONS (search-only elsewhere)
@@ -79,6 +87,7 @@ EXTRACT_ONLY_SOURCE_NOTES: List[Dict[str, str]] = [
     {"id": "beeg", "label": "Beeg", "note": "Import URL only"},
     {"id": "pixeldrain", "label": "Pixeldrain", "note": "Import URL only"},
     {"id": "noodlemagazine", "label": "NoodleMagazine", "note": "Import URL only"},
+    {"id": "thotstv", "label": "Thots.tv", "note": "Import URL only"},
 ]
 
 # Ordered: first substring match wins (specific before generic)
@@ -94,6 +103,9 @@ _LIBRARY_URL_SOURCE_RULES: Tuple[Tuple[str, str], ...] = (
     ("xhamster4.com", "xHamster"),
     ("ixxx.com", "iXXX"),
     ("noodlemagazine.com", "NoodleMagazine"),
+    ("leakporner.com", "LeakPorner"),
+    ("djav.org", "DJAV"),
+    ("58img.top", "LeakPorner"),
     ("erome.com", "Erome"),
     ("kemono.", "Kemono"),
     ("coomer.", "Kemono"),
@@ -116,6 +128,8 @@ _LIBRARY_URL_SOURCE_RULES: Tuple[Tuple[str, str], ...] = (
     ("beeg.com", "Beeg"),
     ("tnaflix.com", "Tnaflix"),
     ("pornone.com", "PornOne"),
+    ("thots.tv", "Thots.tv"),
+    ("thot.tv", "Thots.tv"),
 )
 
 

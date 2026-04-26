@@ -1,4 +1,5 @@
 import asyncio
+import html as html_lib
 import http.cookiejar
 import json
 import logging
@@ -20,6 +21,30 @@ _UA = (
 
 
 class NoodleMagazineExtractor(VideoExtractor):
+    @staticmethod
+    def _collect_playlist_sources(html_text: str) -> list[str]:
+        match = re.search(
+            r"window\.playlist\s*=\s*(\{.*?\})\s*</script>",
+            html_text,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not match:
+            return []
+        try:
+            playlist = json.loads(match.group(1))
+        except Exception:
+            return []
+        if not isinstance(playlist, dict):
+            return []
+        sources = playlist.get("sources") or []
+        if not isinstance(sources, list):
+            return []
+        urls = []
+        for item in sources:
+            if isinstance(item, dict) and item.get("file"):
+                urls.append(str(item["file"]).replace("\\/", "/"))
+        return urls
+
     @staticmethod
     def _resolve_cookiefile() -> Optional[str]:
         env_cookiefile = (os.getenv("NOODLEMAGAZINE_COOKIEFILE") or "").strip()
@@ -162,7 +187,7 @@ class NoodleMagazineExtractor(VideoExtractor):
                     duration = int(m.group(1))
 
             stream_url = None
-            candidates = []
+            candidates = self._collect_playlist_sources(html)
             patterns = [
                 r'["\']?(https?://[^"\'>\s]+\.m3u8[^"\'>\s]*)["\']?',
                 r'["\']?(https?://[^"\'>\s]+\.mp4[^"\'>\s]*)["\']?',
@@ -182,7 +207,7 @@ class NoodleMagazineExtractor(VideoExtractor):
                             except Exception:
                                 continue
                         else:
-                            candidates.append(match.replace("\\/", "/"))
+                            candidates.append(html_lib.unescape(match.replace("\\/", "/")))
 
             best_score = -1
             for c in candidates:
@@ -194,6 +219,10 @@ class NoodleMagazineExtractor(VideoExtractor):
                     score += 2000
                 if ".mp4" in low:
                     score += 1000
+                if "pvvstream" in low:
+                    score += 5000
+                if "/videofile/" in low:
+                    score -= 4000
                 q = re.search(r"(\d{3,4})p", low)
                 if q:
                     score += int(q.group(1))
