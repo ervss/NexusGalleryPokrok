@@ -4,12 +4,14 @@ Centralized configuration management with validation and secure defaults.
 import os
 import re
 import secrets
+from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 import logging
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from project-root .env and prefer these values.
+_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=_ENV_PATH, override=True)
 
 logger = logging.getLogger(__name__)
 

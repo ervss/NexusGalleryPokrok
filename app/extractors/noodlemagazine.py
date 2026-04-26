@@ -1,6 +1,8 @@
 import asyncio
+import http.cookiejar
 import json
 import logging
+import os
 import re
 from typing import Any, Dict, Optional
 
@@ -18,6 +20,20 @@ _UA = (
 
 
 class NoodleMagazineExtractor(VideoExtractor):
+    @staticmethod
+    def _resolve_cookiefile() -> Optional[str]:
+        env_cookiefile = (os.getenv("NOODLEMAGAZINE_COOKIEFILE") or "").strip()
+        candidates = [
+            env_cookiefile,
+            "noodlemagazine.netscape.txt",
+            "cookies.netscape.txt",
+            "cookies.txt",
+        ]
+        for path in candidates:
+            if path and os.path.exists(path):
+                return path
+        return None
+
     @property
     def name(self) -> str:
         return "NoodleMagazine"
@@ -34,15 +50,50 @@ class NoodleMagazineExtractor(VideoExtractor):
 
     def _extract_manual(self, url: str) -> Optional[Dict[str, Any]]:
         try:
-            resp = requests.get(
-                url,
-                headers={
-                    "User-Agent": _UA,
-                    "Referer": "https://noodlemagazine.com/",
-                    "Accept-Language": "en-US,en;q=0.9",
-                },
-                timeout=20,
-            )
+            cookiefile = self._resolve_cookiefile()
+            cookie_jar = None
+            cookie_header = ""
+            if cookiefile:
+                try:
+                    jar = http.cookiejar.MozillaCookieJar(cookiefile)
+                    jar.load(ignore_discard=True, ignore_expires=True)
+                    cookie_jar = jar
+                    cookie_header = "; ".join(
+                        f"{c.name}={c.value}"
+                        for c in jar
+                        if "noodlemagazine.com" in (c.domain or "")
+                    )
+                except Exception as exc:
+                    logger.warning("[NoodleMagazine] Failed to load cookiefile %s: %s", cookiefile, exc)
+
+            headers = {
+                "User-Agent": _UA,
+                "Referer": "https://noodlemagazine.com/",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            if cookie_header:
+                headers["Cookie"] = cookie_header
+
+            # Cloudflare challenge is often bypassed only with browser-like TLS impersonation.
+            resp = None
+            try:
+                from curl_cffi import requests as cffi_requests
+                resp = cffi_requests.get(
+                    url,
+                    impersonate="chrome124",
+                    headers=headers,
+                    timeout=20,
+                )
+            except Exception:
+                pass
+
+            if resp is None:
+                resp = requests.get(
+                    url,
+                    headers=headers,
+                    cookies=cookie_jar,
+                    timeout=20,
+                )
             if resp.status_code != 200:
                 logger.warning("[NoodleMagazine] HTTP %s for %s", resp.status_code, url)
                 return None
@@ -185,6 +236,9 @@ class NoodleMagazineExtractor(VideoExtractor):
                     "Referer": "https://noodlemagazine.com/",
                 },
             }
+            cookiefile = self._resolve_cookiefile()
+            if cookiefile:
+                opts["cookiefile"] = cookiefile
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
             if not info:

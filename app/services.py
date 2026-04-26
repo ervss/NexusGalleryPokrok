@@ -30,7 +30,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from .extractors.bunkr import BunkrExtractor
 from .extractors.gofile import GoFileExtractor
 from extractors.generic import PixeldrainExtractor
-from archivist import Archivist
+from scripts.archivist import Archivist
 
 # --- Eporner API import ---
 def fetch_eporner_videos(query=None, page=1, per_page=20, tags=None, gay=None, hd=None, pornstar=None, order=None):

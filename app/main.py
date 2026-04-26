@@ -43,7 +43,7 @@ import collections
 from .telegram_auth import manager as tg_auth_manager
 from pydantic import BaseModel
 import collections
-from archivist import Archivist
+from scripts.archivist import Archivist
 from .scheduler import init_scheduler, get_scheduler, shutdown_scheduler
 from .auto_discovery import run_discovery_profile, get_worker
 

@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #00d2ff;
+            --secondary: #9d50bb;
+            --bg: #0f0c29;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent: #ff00c8;
+        }
+
+        body {
+            width: 800px;
+            height: 720px;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white;
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 15px 20px;
+            box-sizing: border-box;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 600;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .search-bar {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 12px 20px;
+            color: white;
+            flex-grow: 1;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .sort-select {
+            background: #1a1a3a;
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            color: white;
+            padding: 0 15px;
+            outline: none;
+            font-family: 'Outfit', sans-serif;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .search-bar:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        }
+
+        .stats {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 15px;
+        }
+
+        .video-grid {
+            height: 480px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            overflow-y: auto;
+            padding-right: 10px;
+            align-content: start;
+        }
+
+        .video-grid::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .video-grid::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 10px;
+        }
+
+        .video-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            min-height: 220px;
+            height: auto;
+        }
+
+        .video-card:hover {
+            transform: translateY(-8px);
+            border-color: var(--primary);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .video-card.selected {
+            border: 2px solid var(--primary);
+            background: rgba(0, 210, 255, 0.1);
+        }
+
+        .thumbnail {
+            width: 100%;
+            height: 135px;
+            min-height: 135px;
+            background-size: cover;
+            background-position: center;
+            background-color: #1a1a3a;
+            position: relative;
+        }
+
+        .selection-overlay {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 24px;
+            height: 24px;
+            border: 2px solid white;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .video-card.selected .selection-overlay {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .video-card.selected .selection-overlay::after {
+            content: '✓';
+            color: white;
+            font-size: 14px;
+        }
+
+        .info {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .title-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .type-tag {
+            flex-shrink: 0;
+            font-size: 0.58rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            padding: 2px 5px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .type-tag.type-direct {
+            background: rgba(34, 197, 94, 0.25);
+            color: #4ade80;
+            border: 1px solid rgba(74, 222, 128, 0.45);
+        }
+
+        .type-tag.type-page {
+            background: rgba(251, 146, 60, 0.2);
+            color: #fdba74;
+            border: 1px solid rgba(251, 146, 60, 0.45);
+        }
+
+        .title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #fff;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .stream-url-line {
+            font-size: 0.62rem;
+            line-height: 1.35;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            color: rgba(255, 255, 255, 0.55);
+            word-break: break-all;
+            max-height: 4.2rem;
+            overflow-y: auto;
+            margin-top: 2px;
+            user-select: all;
+            cursor: text;
+        }
+
+        .meta-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 5px;
+        }
+
+        .quality-badge {
+            font-size: 0.7rem;
+            background: var(--primary);
+            color: #0f0c29;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .duration {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            margin-left: 8px;
+            opacity: 0.9;
+        }
+
+        .file-size {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        footer {
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border-radius: 12px;
+            border: none;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary {
+            background: var(--glass);
+            color: white;
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            color: white;
+            box-shadow: 0 5px 15px rgba(0, 210, 255, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(0, 210, 255, 0.5);
+        }
+
+        .btn-primary:disabled {
+            filter: grayscale(1);
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #loader {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--glass);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">GOFILE VIP</div>
+            <div id="folder-name" style="font-size: 0.9rem; opacity: 0.7;">Analýza priečinka...</div>
+        </header>
+
+        <div class="controls">
+            <input type="text" class="search-bar" id="search-input" placeholder="Hľadať videá...">
+            <select id="sort-select" class="sort-select">
+                <option value="name">Názov (A-Z)</option>
+                <option value="size-desc">Veľkosť (Najväčšie)</option>
+                <option value="size-asc">Veľkosť (Najmenšie)</option>
+                <option value="video-count-desc">Počet videí (Najviac)</option>
+            </select>
+        </div>
+
+        <div id="turbo-controls"
+            style="margin-bottom: 10px; padding: 10px; background: rgba(0, 210, 255, 0.05); border-radius: 12px; border: 1px solid var(--glass-border); display: flex; flex-wrap: wrap; gap: 15px; font-size: 0.85rem;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--primary);">
+                <input type="checkbox" id="turbo-mode" style="width: 16px; height: 16px; cursor: pointer;">
+                <span style="font-weight: 600;">Turbo (4 str.)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #ff00c8;">
+                <input type="checkbox" id="deep-scan" style="width: 16px; height: 16px; cursor: pointer;">
+                <span style="font-weight: 600;">Deep Scan (Všetko)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="send-to-dashboard" style="width: 16px; height: 16px; cursor: pointer;">
+                <span>Auto-odoslať</span>
+            </label>
+        </div>
+
+        <div id="bunkr-controls"
+            style="display: none; margin-bottom: 10px; padding: 10px; background: rgba(157, 80, 187, 0.08); border-radius: 12px; border: 1px solid var(--glass-border); flex-wrap: wrap; gap: 15px; font-size: 0.85rem;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #e0b3ff;">
+                <input type="checkbox" id="bunkr-fetch-direct" checked style="width: 16px; height: 16px; cursor: pointer;">
+                <span style="font-weight: 600;">Bunkr: priame MP4 + plná metadata (API / stránka súboru)</span>
+            </label>
+            <span style="opacity: 0.65; font-size: 0.78rem;">Bez zaškrtnutia: len zoznam zo stránky albumu (rýchle). So zaškrtnutím: pre každý súbor získa priamy stream URL (pomalšie).</span>
+        </div>
+
+        <div id="filter-controls"
+            style="margin-bottom: 10px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 12px; border: 1px solid var(--glass-border); display: flex; flex-wrap: wrap; gap: 15px; font-size: 0.82rem;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="opacity: 0.7;">Dĺžka (min):</span>
+                <input type="number" id="min-duration" placeholder="Min"
+                    style="width: 45px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 6px; padding: 3px 6px; outline: none;">
+                <span>-</span>
+                <input type="number" id="max-duration" placeholder="Max"
+                    style="width: 45px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 6px; padding: 3px 6px; outline: none;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="opacity: 0.7;">Kvalita:</span>
+                <select id="quality-filter"
+                    style="background: #1a1a3a; border: 1px solid var(--glass-border); color: white; border-radius: 6px; padding: 2px 10px; outline: none; cursor: pointer;">
+                    <option value="all">Všetka</option>
+                    <option value="4K">4K / UHD</option>
+                    <option value="1080p">1080p / Full HD</option>
+                    <option value="720p">720p / HD</option>
+                    <option value="SD">SD / 480p / 360p</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="port-selector"
+            style="margin-bottom: 10px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 12px; border: 1px solid var(--glass-border); display: flex; align-items: center; gap: 15px; font-size: 0.85rem;">
+            <span style="opacity: 0.7;">Cieľový Port:</span>
+            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--primary);">
+                <input type="radio" name="dashboard-port" value="8000" checked
+                    style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary);">
+                <span style="font-weight: 600;">8000</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--primary);">
+                <input type="radio" name="dashboard-port" value="8001"
+                    style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary);">
+                <span style="font-weight: 600;">8001</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--primary);">
+                <input type="radio" name="dashboard-port" value="8002"
+                    style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary);">
+                <span style="font-weight: 600;">8002</span>
+            </label>
+        </div>
+
+        <div class="stats" id="stats-text">Načítavam súbory...</div>
+
+        <div id="loader">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px; color: rgba(255,255,255,0.5);">Pripravujem galériu...</p>
+        </div>
+
+        <div class="video-grid" id="video-grid" style="display: none;">
+            <!-- Video cards will be injected here -->
+        </div>
+
+        <footer>
+            <button class="btn btn-secondary" id="select-all">Vybrať všetko</button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-secondary" id="copy-btn" disabled
+                    style="border-color: var(--secondary);">Kopírovať ku mne</button>
+                <button class="btn btn-primary" id="import-btn" disabled>Importovať Dashboard</button>
+            </div>
+        </footer>
+    </div>
+    <script src="popup.js"></script>
+</body>
+
+</html>
