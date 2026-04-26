@@ -20,6 +20,7 @@ DISCOVERY_SEARCH_SOURCE_KEYS = frozenset({
     "spankbang",
     "xhamster",
     "ixxx",
+    "noodlemagazine",
 })
 
 SOURCE_KEY_ALIASES: Dict[str, str] = {
@@ -46,6 +47,8 @@ SOURCE_KEY_ALIASES: Dict[str, str] = {
     "xhamster4.com": "xhamster",
     "ixxx.com": "ixxx",
     "www.ixxx.com": "ixxx",
+    "noodlemagazine.com": "noodlemagazine",
+    "nm": "noodlemagazine",
 }
 
 # API + discovery UI (id must be a canonical DISCOVERY_SEARCH_SOURCE_KEYS member)
@@ -75,6 +78,7 @@ EXTRACT_ONLY_SOURCE_NOTES: List[Dict[str, str]] = [
     {"id": "hqporner", "label": "HQPorner", "note": "Import URL only"},
     {"id": "beeg", "label": "Beeg", "note": "Import URL only"},
     {"id": "pixeldrain", "label": "Pixeldrain", "note": "Import URL only"},
+    {"id": "noodlemagazine", "label": "NoodleMagazine", "note": "Import URL only"},
 ]
 
 # Ordered: first substring match wins (specific before generic)
@@ -89,6 +93,7 @@ _LIBRARY_URL_SOURCE_RULES: Tuple[Tuple[str, str], ...] = (
     ("xhamster.com", "xHamster"),
     ("xhamster4.com", "xHamster"),
     ("ixxx.com", "iXXX"),
+    ("noodlemagazine.com", "NoodleMagazine"),
     ("erome.com", "Erome"),
     ("kemono.", "Kemono"),
     ("coomer.", "Kemono"),
