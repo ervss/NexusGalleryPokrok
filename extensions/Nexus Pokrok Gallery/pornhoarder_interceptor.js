@@ -96,6 +96,10 @@
     document.querySelectorAll('video').forEach(v => { v._phWatched = true; watchVideo(v); });
 
     // Strategy 5: postMessage from iframe
+    // Fix 4: relay ALL PH_PLAYER_STREAM messages through the background service worker.
+    // The background tracks per-tab reported URLs, so duplicate reports from both
+    // pornhoarder_interceptor.js and pornhoarder_player_interceptor.js are silently
+    // deduplicated there — no extra round-trip check needed in the content script.
     window.addEventListener('message', (e) => {
         if (!e.data || reported) return;
         if (e.origin && !TRUSTED_PLAYER_ORIGIN.test(e.origin)) return;
@@ -113,6 +117,10 @@
                     playerUrl: e.data.playerUrl || '',
                     streamUrl,
                     isHls: !!e.data.isHls,
+                }, (response) => {
+                    // Background returns {ok: true, data: {skipped: true}} when already
+                    // reported — mark local flag so direct fallback is also skipped.
+                    if (response?.data?.skipped) reported = true;
                 });
                 reported = true;
             } catch (err) {
