@@ -4,8 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
+        /* Fix 5: Bundled font stack — no external network requests.
+           Outfit is approximated by the same Inter/system-ui geometric sans-serif
+           family available on every modern OS.  If users want the exact Outfit
+           typeface they can install it system-wide; the browser will pick it up
+           automatically via the stack below. */
+        @font-face {
+            font-family: 'Outfit';
+            font-style: normal;
+            font-weight: 300 600;
+            src: local('Outfit'), local('Inter'), local('Segoe UI'), local('system-ui');
+            font-display: swap;
+        }
         :root {
             --primary: #00d2ff;
             --secondary: #9d50bb;

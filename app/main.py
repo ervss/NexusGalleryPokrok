@@ -1115,6 +1115,36 @@ async def get_gofile_token():
     token = GoFileExtractor._user_token or (config.GOFILE_TOKEN or "")
     return {"token": token}
 
+# Extension-specific capture hosts not already covered by source_catalog rules.
+# Add new entries here to extend interception without updating the extension package.
+_EXTENSION_EXTRA_CAPTURE_HOSTS: list[str] = [
+    "recurbate.com", "rec-ur-bate.com", "vidara.so", "sxyprn.com",
+    "krakenfiles.com", "hornysimp.com", "nsfw247.to", "fullporner.com",
+]
+
+@api_v1_router.get("/config/supported_hosts")
+@api_legacy_router.get("/config/supported_hosts")
+async def get_supported_hosts():
+    """Return the canonical list of hostnames that the browser extension should
+    intercept.  The extension fetches this on startup and hourly so that new
+    sources can be added here without needing to update the extension package."""
+    from .source_catalog import _LIBRARY_URL_SOURCE_RULES
+    # Build a de-duplicated list of bare hostnames from the source catalog rules.
+    # We expose only real hostnames (those that contain a dot) so the extension
+    # can do exact hostname matching rather than substring matching.
+    seen: set[str] = set()
+    hosts: list[str] = []
+    for needle, _ in _LIBRARY_URL_SOURCE_RULES:
+        host = needle.lstrip(".")
+        if "." in host and host not in seen:
+            seen.add(host)
+            hosts.append(host)
+    for h in _EXTENSION_EXTRA_CAPTURE_HOSTS:
+        if h not in seen:
+            seen.add(h)
+            hosts.append(h)
+    return {"hosts": hosts}
+
 # --- Stats Endpoints ---
 @api_v1_router.get("/stats/batches")
 @api_legacy_router.get("/stats/batches")
