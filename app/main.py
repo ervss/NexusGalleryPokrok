@@ -268,8 +268,10 @@ async def lifespan(app: FastAPI):
 
     # --- INITIALIZE TASK SCHEDULER ---
     try:
+        from .extractors import register_extended_extractors
+        register_extended_extractors()
         scheduler = init_scheduler()
-        print("Task scheduler initialized")
+        print("Task scheduler and all extractors initialized")
 
         # Load and schedule all enabled discovery profiles
         db = SessionLocal()
@@ -698,33 +700,109 @@ async def pornhoarder_update_stream(payload: dict, db: Session = Depends(get_db)
     # For browser-captured providers, try extractor once:
     # - resolves non-playable captures/player URLs to direct streams
     # - fills metadata for clean dashboard cards.
-    if source in ("pornhoarder", "recurbate", "leakporner", "djav"):
+    is_known_source = source in ("pornhoarder", "recurbate", "leakporner", "djav", "vidara", "vidsonic", "vidfast", "lulustream", "luluvid", "luluvdo", "lulu.stream", "sxyprn", "krakenfiles")
+    is_vidara_stream = any(d in stream_url.lower() for d in ("vidara.so", "vidsonic.net", "vidfast.co"))
+    is_lulu_stream = any(d in stream_url.lower() for d in ("lulustream", "luluvid", "luluvdo", "lulu.stream"))
+
+    if is_known_source or is_vidara_stream or is_lulu_stream:
         try:
+            extractor = None
             if source == "pornhoarder":
                 from .extractors.pornhoarder import PornHoarderExtractor
                 extractor = PornHoarderExtractor()
             elif source in ("leakporner", "djav"):
                 from .extractors.leakporner import LeakPornerExtractor
                 extractor = LeakPornerExtractor()
-            else:
+            elif source in ("vidara", "vidsonic", "vidfast") or is_vidara_stream:
+                from .extractors.vidara import VidaraExtractor
+                extractor = VidaraExtractor()
+            elif source in ("lulustream", "luluvid", "luluvdo", "lulu.stream") or is_lulu_stream:
+                from .extractors.lulustream import LuluStreamExtractor
+                extractor = LuluStreamExtractor()
+            elif source == "krakenfiles" or "krakenfiles.com" in stream_url.lower():
+                from .extractors.krakenfiles import KrakenFilesExtractor
+                extractor = KrakenFilesExtractor()
+            elif source == "sxyprn" or "sxyprn.com" in stream_url.lower():
+                from .extractors.sxyprn import SxyPrnExtractor
+                extractor = SxyPrnExtractor()
+            elif source == "recurbate":
                 from .extractors.recurbate import RecurbateExtractor
                 extractor = RecurbateExtractor()
-            extracted = await extractor.extract(source_url)
-            if extracted:
-                candidate = (extracted.get("stream_url") or "").strip()
-                if (
-                    candidate and
-                    _looks_like_stream(candidate) and
-                    "player.php" not in candidate.lower() and
-                    (not _looks_like_stream(stream_url) or "player.php" in stream_url.lower())
-                ):
-                    resolved_stream = candidate
-                resolved_title = resolved_title or (extracted.get("title") or "").strip()
-                resolved_thumbnail = (extracted.get("thumbnail") or "").strip()
-                resolved_duration = int(extracted.get("duration") or 0)
-                resolved_player_url = (extracted.get("player_url") or "").strip()
+            
+            if extractor:
+                # If title is generic or missing, we MUST extract to get real metadata
+                is_generic_title = not resolved_title or any(x in resolved_title.lower() for x in (">external link!<", "krakenfiles.com", "vidara.so", "vidsonic", "vidfast"))
+                
+                # Use source_url for extraction if available, otherwise stream_url
+                extraction_url = source_url or stream_url
+                
+                # Use source_url if it's from the same domain, otherwise use stream_url
+                target_url = source_url if (source in extractor.name.lower() or extractor.can_handle(source_url)) else stream_url
+                
+                # Special case for Vidara/Lulu embedded on other sites
+                if not extractor.can_handle(target_url) and is_vidara_stream:
+                    target_url = stream_url
+                
+                extracted = await extractor.extract(target_url)
+                if extracted:
+                    candidate = (extracted.get("stream_url") or "").strip()
+                    if (
+                        candidate and
+                        _looks_like_stream(candidate) and
+                        "player.php" not in candidate.lower() and
+                        (not _looks_like_stream(stream_url) or "player.php" in stream_url.lower())
+                    ):
+                        resolved_stream = candidate
+                    if (is_generic_title or not resolved_title):
+                        ext_title = (extracted.get("title") or "").strip()
+                        if ext_title: resolved_title = ext_title
+                    resolved_thumbnail = (extracted.get("thumbnail") or "").strip()
+                    resolved_duration = int(extracted.get("duration") or 0)
+                    resolved_player_url = (extracted.get("player_url") or "").strip()
+                    
+                    # Detect quality
+                    if any(x in (resolved_title + stream_url).lower() for x in ("1080", "fhd", "ultra")):
+                        quality = "FHD"
+                    elif any(x in (resolved_title + stream_url).lower() for x in ("720", "hd")):
+                        quality = "HD"
+                    elif extracted.get("quality"):
+                        quality = extracted.get("quality")
         except Exception as exc:
             logging.warning(f"[StreamCapture] stream resolve failed for {source_url}: {exc}")
+
+    # Server-side smart filter: Reject previews/thumbs
+    if any(x in resolved_stream.lower() for x in ("vidthumb", "preview", "small.mp4", "get_preview")):
+        logging.info(f"[StreamCapture] Rejected preview stream: {resolved_stream}")
+        return {"status": "ignored", "message": "preview_detected"}
+
+    # Final title cleanup
+    if resolved_title:
+        # Remove common artifacts
+        for artifact in (">External Link!<", "krakenfiles.com", "vidara.so", "vidsonic.net", "vidfast.co", "sxyprn.com", "vidfast.co", "vidsonic.net"):
+            resolved_title = re.sub(re.escape(artifact), "", resolved_title, flags=re.IGNORECASE)
+        resolved_title = resolved_title.strip(" -|")
+        if not resolved_title:
+            resolved_title = _title_from_source(source_url) or f"{source.capitalize()} Video"
+
+    # Detect quality and try to get file size
+    resolved_quality = "SD"
+    if any(x in (resolved_title + resolved_stream).lower() for x in ("1080", "fhd", "ultra", "1440", "4k")):
+        resolved_quality = "FHD"
+    elif any(x in (resolved_title + resolved_stream).lower() for x in ("720", "hd")):
+        resolved_quality = "HD"
+
+    file_size_mb = 0
+    try:
+        import httpx
+        with httpx.Client(timeout=3) as client:
+            h_resp = client.head(resolved_stream, follow_redirects=True)
+            if h_resp.status_code < 400:
+                content_length = int(h_resp.headers.get("Content-Length", 0))
+                if content_length > 0:
+                    file_size_mb = round(content_length / (1024 * 1024), 1)
+                    logging.info(f"[StreamCapture] Detected file size: {file_size_mb} MB")
+    except Exception:
+        pass
 
     if not _looks_like_stream(resolved_stream):
         logging.warning(f"[PH-Interceptor] Rejected non-playable stream URL: {resolved_stream[:120]}")
@@ -749,7 +827,11 @@ async def pornhoarder_update_stream(payload: dict, db: Session = Depends(get_db)
         logging.info(f"[PH-Interceptor] Updating stream for video {video.id}: {resolved_stream[:80]}")
         video.url = resolved_stream
         video.status = "ready_to_stream"
-        if resolved_title and (not video.title or str(video.title).lower().startswith(("untitled", "queued"))):
+        if resolved_quality:
+            video.quality = resolved_quality
+        if file_size_mb > 0:
+            video.file_size_mb = file_size_mb
+        if resolved_title and (not video.title or any(x in str(video.title).lower() for x in ("untitled", "queued", ">external link!<"))):
             video.title = resolved_title
         if resolved_duration > 0 and not (video.duration or 0):
             video.duration = float(resolved_duration)
@@ -782,6 +864,8 @@ async def pornhoarder_update_stream(payload: dict, db: Session = Depends(get_db)
         tags=source,
         storage_type="remote",
         status="ready_to_stream",
+        quality=resolved_quality,
+        file_size_mb=file_size_mb,
         download_stats=({"player_url": resolved_player_url} if resolved_player_url else None),
     )
     db.add(new_video)
@@ -4870,8 +4954,12 @@ async def proxy_video(video_id: str, request: Request, url: Optional[str] = None
                                 opts['cookiefile'] = cf
                                 break
                         info = None
-                        with yt_dlp.YoutubeDL(opts) as ydl:
-                            info = ydl.extract_info(refresh_source_url, download=False)
+                        try:
+                            with yt_dlp.YoutubeDL(opts) as ydl:
+                                info = ydl.extract_info(refresh_source_url, download=False)
+                        except (yt_dlp.utils.DownloadError, yt_dlp.utils.UnsupportedError) as e:
+                            logging.warning("[CW-L2] yt-dlp cannot handle URL %s: %s", refresh_source_url, e)
+                            return None
                         if not info:
                             return None
                         # Pick best video URL from formats list
@@ -5237,6 +5325,17 @@ async def hls_proxy(url: str, referer: str = ""):
     if not url.startswith(("http://", "https://")):
         raise HTTPException(400, "Invalid URL")
 
+    # Detect JW Player ping URLs with hidden manifest in 'mu' parameter
+    if "ping.gif" in url.lower() and "mu=" in url.lower():
+        try:
+            parsed_query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+            if 'mu' in parsed_query:
+                real_url = parsed_query['mu'][0]
+                logging.info(f"HLS Proxy: Extracted real manifest from ping URL mu param: {real_url[:120]}...")
+                url = real_url
+        except Exception as e:
+            logging.warning(f"HLS Proxy: Failed to parse ping URL mu parameter: {e}")
+
     # Derive referer from URL origin if not supplied
     if not referer:
         parts = url.split("/")
@@ -5288,6 +5387,13 @@ async def hls_proxy(url: str, referer: str = ""):
                     seg_url = urllib.parse.urljoin(url, stripped)
                     encoded_seg = urllib.parse.quote(seg_url, safe="")
                     lines.append(f"/hls_proxy?url={encoded_seg}&referer={encoded_referer}")
+                elif stripped.startswith("#EXT-X-KEY:") and 'URI="' in stripped:
+                    # Rewrite encryption key URI so browser fetches it through our proxy
+                    def rewrite_key_uri(m):
+                        key_url = urllib.parse.urljoin(url, m.group(1))
+                        encoded_key = urllib.parse.quote(key_url, safe="")
+                        return f'URI="/hls_proxy?url={encoded_key}&referer={encoded_referer}"'
+                    lines.append(re.sub(r'URI="([^"]+)"', rewrite_key_uri, stripped))
                 else:
                     lines.append(line)
             return Response(

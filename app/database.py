@@ -56,6 +56,8 @@ class Video(Base):
     
     views = Column(Integer, default=0)
     upload_date = Column(String, nullable=True) # "May 2, 2025" or ISO format
+    quality = Column(String, default="SD")
+    file_size_mb = Column(Float, default=0)
     
     # Duplicate Detection
     phash = Column(String, index=True, nullable=True)  # Perceptual hash of thumbnail
@@ -209,6 +211,12 @@ def init_db():
         if 'upload_date' not in columns:
             with engine.connect() as connection:
                 connection.execute(text('ALTER TABLE videos ADD COLUMN upload_date VARCHAR'))
+        if 'quality' not in columns:
+            with engine.connect() as connection:
+                connection.execute(text('ALTER TABLE videos ADD COLUMN quality VARCHAR DEFAULT "SD"'))
+        if 'file_size_mb' not in columns:
+            with engine.connect() as connection:
+                connection.execute(text('ALTER TABLE videos ADD COLUMN file_size_mb FLOAT DEFAULT 0'))
 
     if not inspector.has_table("smart_playlists"):
          Base.metadata.create_all(bind=engine)

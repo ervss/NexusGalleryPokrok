@@ -14,6 +14,11 @@ from .archivebate import ArchivebateExtractor
 from .recurbate import RecurbateExtractor
 from .noodlemagazine import NoodleMagazineExtractor
 from .thotstv import ThotsTvExtractor
+from .vidara import VidaraExtractor
+from .lulustream import LuluStreamExtractor
+from .krakenfiles import KrakenFilesExtractor
+from .sxyprn import SxyPrnExtractor
+from .hornysimp import HornySimpExtractor
 
 
 def init_registry():
@@ -48,6 +53,16 @@ def init_registry():
         ExtractorRegistry.register(NoodleMagazineExtractor())
     if "ThotsTv" not in existing_names:
         ExtractorRegistry.register(ThotsTvExtractor())
+    if "Vidara" not in existing_names:
+        ExtractorRegistry.register(VidaraExtractor())
+    if "LuluStream" not in existing_names:
+        ExtractorRegistry.register(LuluStreamExtractor())
+    if "KrakenFiles" not in existing_names:
+        ExtractorRegistry.register(KrakenFilesExtractor())
+    if "SxyPrn" not in existing_names:
+        ExtractorRegistry.register(SxyPrnExtractor())
+    if "HornySimp" not in existing_names:
+        ExtractorRegistry.register(HornySimpExtractor())
 
 
 def register_extended_extractors():

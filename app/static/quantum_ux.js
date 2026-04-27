@@ -666,12 +666,11 @@ function createQuantumUXModule() {
             const original = this.currentDuplicatePair.original;
             const duplicate = this.currentDuplicatePair.duplicate;
 
-            const origValue = original[field];
-            const dupValue = duplicate[field];
-
-            if (origValue > dupValue) return 'left';
-            if (dupValue > origValue) return 'right';
-            return null;
+            const ov = original[field];
+            const dv = duplicate[field];
+            if (ov === dv) return 'equal';
+            if (ov > dv) return 'original-better';
+            return 'duplicate-better';
         },
 
         // ========== 10. SESSION PERSISTENCE ==========

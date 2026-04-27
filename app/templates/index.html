@@ -13,14 +13,14 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <!-- Load HLS.js FIRST before any other scripts -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
-    <script src="/static/main.js?v=null_fix_v4" defer></script>
-    <script src="/static/search.js?v=quantum_v1" defer></script>
-    <!-- QUANTUM UX JAVASCRIPT -->
+    <!-- QUANTUM UX JAVASCRIPT must load before main.js and alpine -->
     <script src="/static/quantum_ux.js?v=1.0" defer></script>
+    <script src="/static/bunkr_nexus.js?v=1.0" defer></script>
+    <script src="/static/search.js?v=quantum_v1" defer></script>
+    <script src="/static/main.js?v=null_fix_v5" defer></script>
     <script src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
     <!-- BUNKR NEXUS -->
     <link rel="stylesheet" href="/static/bunkr_nexus.css?v=1.0" />
-    <script src="/static/bunkr_nexus.js?v=1.0" defer></script>
 
     <style>
         /* FORCE BATCH QUEUE BUTTON TO BE VISIBLE */
@@ -828,9 +828,9 @@
 
 
                                 <div class="duration-chip" x-text="formatDuration(video.duration)"></div>
-                                <div class="quality-chip" x-text="getQuality(video.height)"
-                                    :class="getQualityClass(video.height)"
-                                    :title="getQualityTitle(video.width, video.height)"></div>
+                                <div class="quality-chip" x-text="getQuality(video)"
+                                    :class="getQualityClass(video)"
+                                    :title="getQualityTitle(video)"></div>
                                 <div class="select-check" x-show="batchMode"><span class="material-icons-round"
                                         x-text="isSelected(video.id) ? 'check_box' : 'check_box_outline_blank'"></span>
                                 </div>
@@ -856,7 +856,7 @@
                                 <!-- Metadata row: Date & Size -->
                                 <div class="v-info-row" style="display:flex; align-items:baseline; justify-content:space-between; margin-top:6px; padding: 4px 0;">
                                     <span style="font-size:20px; font-weight:700; color:#e2e8f0; letter-spacing:-0.3px; line-height:1.2;" x-text="formatImportDate(video.created_at)"></span>
-                                    <span x-show="formatVideoSize(video.download_stats)" style="font-size:20px; font-weight:700; color:#a78bfa; letter-spacing:-0.3px; line-height:1.2;" x-text="formatVideoSize(video.download_stats)"></span>
+                                    <span x-show="formatVideoSize(video)" style="font-size:20px; font-weight:700; color:#a78bfa; letter-spacing:-0.3px; line-height:1.2;" x-text="formatVideoSize(video)"></span>
                                 </div>
                                 <div class="v-actions-row" style="display:flex; gap:6px; margin-top:10px;">
                                     <button class="btn-stream" title="Watch Play" @click.stop="playVideo(video)"

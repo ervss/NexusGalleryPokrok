@@ -13,8 +13,23 @@ chrome.webRequest.onBeforeRequest.addListener(
         // Filter for video formats and exclude obvious ads
         if (url.includes('.m3u8') || url.includes('.mp4') || url.includes('.mpd')) {
             if (!url.includes('ads') && !url.includes('telemetry') && !url.includes('analytics')) {
-                console.log(`[Nexus] Captured stream: ${url} for tab ${tabId}`);
-                capturedStreams.set(tabId, url);
+                let finalUrl = url;
+                
+                // Detect JW Player ping URLs with hidden manifest in 'mu' parameter
+                if (url.includes('ping.gif') && url.includes('mu=')) {
+                    try {
+                        const muMatch = url.match(/[?&]mu=([^&]+)/);
+                        if (muMatch) {
+                            finalUrl = decodeURIComponent(muMatch[1]);
+                            console.log(`[Nexus] Extracted real manifest from ping URL: ${finalUrl}`);
+                        }
+                    } catch (e) {
+                        console.error('[Nexus] Failed to parse ping URL', e);
+                    }
+                }
+
+                console.log(`[Nexus] Captured stream: ${finalUrl} for tab ${tabId}`);
+                capturedStreams.set(tabId, finalUrl);
             }
         }
     },
@@ -32,6 +47,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'GET_CAPTURED_STREAM') {
         const streamUrl = capturedStreams.get(tabId);
         sendResponse({ streamUrl });
+    }
+
+    if (request.type === 'FETCH_PLAYLIST') {
+        fetch(request.url)
+            .then(res => res.text())
+            .then(text => sendResponse({ text }))
+            .catch(err => sendResponse({ error: err.message }));
+        return true;
     }
 
     if (request.type === 'IMPORT_VIDEO') {

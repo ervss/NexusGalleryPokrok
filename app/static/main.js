@@ -79,7 +79,7 @@ function createCollectionModule() {
             return '';
         },
 
-        getQuality(h) {
+        getQualityLabel(h) {
             if (!h) return 'SD';
             if (h >= 2160) return '4K';
             if (h >= 1440) return '2K';
@@ -623,9 +623,14 @@ function createSettingsModule() {
         settings: { genSpeed: 'fast', autoplay: true, loop: false, theme: 'dark', accentColor: 'purple', playbackSpeed: 1.0, useHls: false, uiMode: 'default' },
 
         loadSettings() {
-            const s = localStorage.getItem('vipSettings');
-            if (s) {
-                this.settings = { ...this.settings, ...JSON.parse(s) };
+            try {
+                const s = localStorage.getItem('vipSettings');
+                if (s) {
+                    const parsed = JSON.parse(s);
+                    this.settings = { ...this.settings, ...parsed };
+                }
+            } catch (e) {
+                console.error('Failed to load settings:', e);
             }
         },
 
@@ -2616,11 +2621,19 @@ function createPlayerModule() {
             // Use HLS.js for HLS streams, but NOT for Webshare, as it handles its own streaming.
             if (typeof Hls !== 'undefined' && Hls.isSupported() && isHls && !isWebshare) {
                 console.log(`[Player ${playerIdx}] Attaching HLS.js to video element.`);
+                const hlsRefererForKey = video.source_url ? encodeURIComponent(new URL(video.source_url).origin + '/') : '';
                 const hls = new Hls({
                     fragLoadingMaxRetry: 5,
                     fragLoadingMaxRetryTimeout: 20000,
                     levelLoadingMaxRetry: 5,
                     levelLoadingMaxRetryTimeout: 20000,
+                    xhrSetup: function(xhr, url) {
+                        // Proxy encryption keys through our backend to avoid CORS
+                        if (/\/encryption\.key|\/key\.bin/i.test(url) && url.startsWith('http')) {
+                            const proxied = `/hls_proxy?url=${encodeURIComponent(url)}&referer=${hlsRefererForKey}`;
+                            xhr.open('GET', proxied, true);
+                        }
+                    },
                 });
                 if (playerIdx === 0) this.hls1 = hls;
                 else this.hls2 = hls;
@@ -3582,16 +3595,27 @@ function createUtilityModule() {
             return `${m}:${s.toString().padStart(2, '0')}`;
         },
 
-        getQuality(height) {
-            return height >= 2160 ? '4K' : height >= 1440 ? '1440p' : height >= 1080 ? '1080p' : height >= 720 ? '720p' : 'SD';
+        getQuality(video) {
+            if (video.quality && video.quality !== 'SD') return video.quality;
+            const h = video.height || 0;
+            return h >= 2160 ? '4K' : h >= 1440 ? '1440p' : h >= 1080 ? '1080p' : h >= 720 ? '720p' : 'SD';
         },
 
-        getQualityClass(height) {
-            return height >= 2160 ? 'q-4k' : height >= 1080 ? 'q-fhd' : '';
+        getQualityClass(video) {
+            const q = this.getQuality(video);
+            return (q === '4K' || q === '1440p' || q === '1080p' || q === 'FHD') ? 'q-4k' : q === 'HD' ? 'q-hd' : '';
         },
 
-        getQualityTitle(width, height) {
-            return width && height ? `${width}x${height}` : 'Resolution not available';
+        getQualityTitle(video) {
+            return video.width && video.height ? `${video.width}x${video.height}` : 'Resolution not available';
+        },
+
+        formatVideoSize(video) {
+            if (video.file_size_mb > 0) return `${video.file_size_mb} MB`;
+            const stats = video.download_stats;
+            if (!stats || !stats.size_mb) return '';
+            if (stats.size_mb > 1024) return (stats.size_mb / 1024).toFixed(1) + ' GB';
+            return stats.size_mb + ' MB';
         },
 
         getStatusClass(status) {
@@ -3778,45 +3802,49 @@ function createShortcutModule() {
 function createLifecycleModule() {
     return {
         init() {
-            this.loadSettings();
-            this.loadBatches();
-            this.loadTags();
-            this.loadVideos(true);
-            this.setupKeys();
-            this.loadSmartPlaylists();
-            this.loadRecommendations();
-            this.connectWebSocket();
-            this.registerDragAndDrop();
-            this.startDownloadPolling();
+            try {
+                this.loadSettings();
+                this.loadBatches();
+                this.loadTags();
+                this.loadVideos(true);
+                this.setupKeys();
+                this.loadSmartPlaylists();
+                this.loadRecommendations();
+                this.connectWebSocket();
+                this.registerDragAndDrop();
+                this.startDownloadPolling();
 
-            // QUANTUM UX - Initialize all 10 powerful features
-            if (typeof this.initQuantumUX === 'function') {
-                this.initQuantumUX();
-            }
-
-            document.body.className = (this.settings.theme || 'dark') + '-theme';
-            if (this.settings.uiMode === 'netflix') document.body.classList.add('netflix-mode');
-            document.body.dataset.accent = this.settings.accentColor || 'purple';
-
-            this.$watch('settings.theme', (theme) => {
-                document.body.className = theme + '-theme';
-                if (this.settings.uiMode === 'netflix') document.body.classList.add('netflix-mode');
-            });
-            this.$watch('settings.accentColor', (color) => {
-                document.body.dataset.accent = color;
-            });
-            this.$watch('settings.uiMode', (mode) => {
-                if (mode === 'netflix') document.body.classList.add('netflix-mode');
-                else document.body.classList.remove('netflix-mode');
-            });
-
-            this.$watch('commandQuery', (q) => this.runCommandSearch(q));
-            this.$watch('showCommandPalette', (visible) => {
-                if (visible) {
-                    this.commandQuery = '';
-                    this.$nextTick(() => this.$refs.commandInput.focus());
+                // QUANTUM UX - Initialize all 10 powerful features
+                if (typeof this.initQuantumUX === 'function') {
+                    this.initQuantumUX();
                 }
-            });
+
+                document.body.className = (this.settings.theme || 'dark') + '-theme';
+                if (this.settings.uiMode === 'netflix') document.body.classList.add('netflix-mode');
+                document.body.dataset.accent = this.settings.accentColor || 'purple';
+
+                this.$watch('settings.theme', (theme) => {
+                    document.body.className = theme + '-theme';
+                    if (this.settings.uiMode === 'netflix') document.body.classList.add('netflix-mode');
+                });
+                this.$watch('settings.accentColor', (color) => {
+                    document.body.dataset.accent = color;
+                });
+                this.$watch('settings.uiMode', (mode) => {
+                    if (mode === 'netflix') document.body.classList.add('netflix-mode');
+                    else document.body.classList.remove('netflix-mode');
+                });
+
+                this.$watch('commandQuery', (q) => this.runCommandSearch(q));
+                this.$watch('showCommandPalette', (visible) => {
+                    if (visible) {
+                        this.commandQuery = '';
+                        this.$nextTick(() => this.$refs.commandInput.focus());
+                    }
+                });
+            } catch (e) {
+                console.error('CRITICAL: Alpine init failed:', e);
+            }
         }
     };
 }

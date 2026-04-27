@@ -5,9 +5,11 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
+from app.database import Video
 from app.duplicate_detector import compute_all_phashes, find_duplicates, mark_as_duplicate
 
 router = APIRouter(tags=["duplicates"])
@@ -16,6 +18,10 @@ router = APIRouter(tags=["duplicates"])
 class MarkDuplicateBody(BaseModel):
     duplicate_id: int
     original_id: int
+
+
+class UrlExistsBody(BaseModel):
+    urls: list[str]
 
 
 @router.post("/duplicates/scan")
@@ -43,3 +49,24 @@ def get_duplicates(db: Session = Depends(get_db)):
 def mark_duplicate(body: MarkDuplicateBody, db: Session = Depends(get_db)):
     success = mark_as_duplicate(db, body.duplicate_id, body.original_id)
     return {"success": success}
+
+
+@router.post("/videos/exists")
+def videos_exist(body: UrlExistsBody, db: Session = Depends(get_db)):
+    urls = [str(url).strip() for url in (body.urls or []) if str(url).strip()]
+    if not urls:
+        return {"existing": [], "count": 0}
+
+    rows = db.query(Video.url, Video.source_url).filter(
+        or_(Video.url.in_(urls), Video.source_url.in_(urls))
+    ).all()
+
+    existing = set()
+    requested = set(urls)
+    for row in rows:
+        if row.url in requested:
+            existing.add(row.url)
+        if row.source_url in requested:
+            existing.add(row.source_url)
+
+    return {"existing": sorted(existing), "count": len(existing)}
