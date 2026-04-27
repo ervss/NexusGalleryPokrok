@@ -111,11 +111,16 @@ analyze_*.py
 check_*.py
 deep_analyze_*.py
 *.json
+!manifest.json
+!rules.json
 *.ps1
 *.bat
 *.bak
 *.txt
 *.png
+!icon.png
+!icon*.png
+!logo.png
 *.jpg
 *.jpeg
 *.gif

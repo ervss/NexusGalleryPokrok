@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "NexusPokrokGallery",
+  "version": "2.0",
+  "description": "Premium bulk video importer for GoFile, Eporner, and Pornhub",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://api.gofile.io/*",
+    "https://gofile.io/*",
+    "https://*.eporner.com/*",
+    "https://*.pornhub.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gofile.io/d/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ]
+    }
+  ]
+}

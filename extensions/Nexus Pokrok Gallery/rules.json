@@ -1,0 +1,61 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        { "header": "Cross-Origin-Resource-Policy", "operation": "remove" },
+        { "header": "Cross-Origin-Embedder-Policy",  "operation": "remove" }
+      ]
+    },
+    "condition": {
+      "resourceTypes": ["image", "xmlhttprequest", "media"],
+      "urlFilter": "||58img.top/*"
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        { "header": "Cross-Origin-Resource-Policy", "operation": "remove" },
+        { "header": "Cross-Origin-Embedder-Policy",  "operation": "remove" }
+      ]
+    },
+    "condition": {
+      "resourceTypes": ["image", "xmlhttprequest", "media"],
+      "urlFilter": "||hornysimp*"
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        { "header": "Cross-Origin-Resource-Policy", "operation": "remove" },
+        { "header": "Cross-Origin-Embedder-Policy", "operation": "remove" }
+      ]
+    },
+    "condition": {
+      "resourceTypes": ["xmlhttprequest", "media", "image"],
+      "urlFilter": "||nsfwclips.co/*"
+    }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        { "header": "Cross-Origin-Resource-Policy", "operation": "remove" }
+      ]
+    },
+    "condition": {
+      "resourceTypes": ["xmlhttprequest"],
+      "regexFilter": "(streamsb|dood|filemoon)\\."
+    }
+  }
+]
