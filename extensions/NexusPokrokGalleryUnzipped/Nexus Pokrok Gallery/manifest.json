@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "NexusPokrokGallery",
+  "name": "EXTENSION NAJNOVSI GALLERKA GOFILE",
   "version": "2.2",
   "description": "Premium explorer and bulk importer for GoFile, Bunkr, XVideos, Eporner, Pornhub, NoodleMagazine, Erome, Pixeldrain, Filester, PornHoarder, Archivebate and more",
   "permissions": [
@@ -114,14 +114,6 @@
     "https://streamsb.*/*",
     "https://dood.*/*",
     "https://filemoon.*/*",
-    "https://*.mypornerleak.com/*",
-    "https://mypornerleak.com/*",
-    "https://*.pimpbunny.com/*",
-    "https://pimpbunny.com/*",
-    "https://*.pornhd4k.net/*",
-    "https://pornhd4k.net/*",
-    "https://*.8kporner.com/*",
-    "https://8kporner.com/*",
     "<all_urls>"
   ],
   "background": {

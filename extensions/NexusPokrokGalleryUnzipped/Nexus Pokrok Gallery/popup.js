@@ -215,18 +215,8 @@ function updatePageScanInfo() {
     el.textContent = bits.join(' | ');
 }
 
-function isMyPornerLeakUrl(url) {
-    if (!url) return false;
-    try {
-        const h = new URL(url).hostname.toLowerCase();
-        return h === 'mypornerleak.com' || h.endsWith('.mypornerleak.com');
-    } catch {
-        return /mypornerleak\.com/i.test(url);
-    }
-}
-
 function isPagedExplorerUrl(url) {
-    return /pornhub\.com|eporner\.com|pornone\.com|pornhd\.com|sxyprn\.com|fullporner\.com|noodlemagazine\.com|erome\.com|xvideos\.(?:com|red)|xgroovy(?:-fr)?\.com|xhamster(?:-fr)?\.com|xhamster\.desi|leakporner\.com|djav\.org|pornhoarder\.io|archivebate\.com|recurbate\.com|rec-ur-bate\.com|whoreshub|thots\.tv|hornysimp|nsfw247|mypornerleak\.com/i.test(String(url || ''));
+    return /pornhub\.com|eporner\.com|pornone\.com|pornhd\.com|sxyprn\.com|fullporner\.com|noodlemagazine\.com|erome\.com|xvideos\.(?:com|red)|xgroovy(?:-fr)?\.com|xhamster(?:-fr)?\.com|xhamster\.desi|leakporner\.com|djav\.org|pornhoarder\.io|archivebate\.com|recurbate\.com|rec-ur-bate\.com|whoreshub|thots\.tv|hornysimp|nsfw247/i.test(String(url || ''));
 }
 
 async function detectPaginationInfo(tabId) {
@@ -1970,12 +1960,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (isNsfw247Url(tab.url)) {
                 document.getElementById('turbo-controls').style.display = 'flex';
                 await handleNsfw247Scraping(tab);
-            } else if (isMyPornerLeakUrl(tab.url)) {
-                document.getElementById('turbo-controls').style.display = 'flex';
-                await handleMyPornerLeakScraping(tab);
             } else {
                 const container = document.querySelector('.container');
-                if (container) container.innerHTML = '<div style="padding:40px;text-align:center;opacity:0.6;"><h3>Quantum Explorer</h3><p>Otvor podporovanú stránku:<br>GoFile, Filester, Bunkr, XVideos, Eporner, Pornhub, PornOne, PornHD, SxyPrn, FullPorner, NoodleMagazine, Erome, Pixeldrain, LeakPorner, PornHoarder, Archivebate, Recurbate, WhoresHub, HornySimp, NSFW247, MyPornerLeak</p></div>';
+                if (container) container.innerHTML = '<div style="padding:40px;text-align:center;opacity:0.6;"><h3>Quantum Explorer</h3><p>Otvor podporovanú stránku:<br>GoFile, Filester, Bunkr, XVideos, Eporner, Pornhub, PornOne, PornHD, SxyPrn, FullPorner, NoodleMagazine, Erome, Pixeldrain, LeakPorner, PornHoarder, Archivebate, Recurbate, WhoresHub, HornySimp, NSFW247</p></div>';
             }
 
             // After scraping, run duplicate check if enabled
@@ -3110,109 +3097,6 @@ async function handlePornhubScraping(tab) {
     } catch (err) {
         console.error("Error during Pornhub scraping:", err);
         showError(`Failed to scrape Pornhub: ${err.message}`);
-    }
-}
-
-async function handleMyPornerLeakScraping(tab) {
-    console.log("MyPornerLeak scraping tab:", tab.id);
-    document.getElementById('loader').style.display = 'flex';
-    document.getElementById('video-grid').style.display = 'none';
-
-    const pageLimit = getRequestedPageLimit();
-    const statsEl = document.getElementById('stats-text');
-    if (statsEl) statsEl.innerText = 'MyPornerLeak: Scraping…';
-
-    try {
-        const [{ result }] = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: async (limit, dashboardUrl) => {
-                const normalizeThumb = (rawThumb, baseUrl) => {
-                    let thumbnail = String(rawThumb || '').trim();
-                    if (!thumbnail || /^data:/i.test(thumbnail)) return '';
-                    if (thumbnail.startsWith('//')) thumbnail = `https:${thumbnail}`;
-                    else if (thumbnail.startsWith('/')) thumbnail = new URL(thumbnail, baseUrl).href;
-                    if (thumbnail && /^https?:\/\//i.test(thumbnail) && !thumbnail.includes('localhost')) {
-                        thumbnail = `${dashboardUrl}/api/v1/proxy?url=${encodeURIComponent(thumbnail)}`;
-                    }
-                    return thumbnail;
-                };
-
-                const extractFromDoc = (doc, baseUrl) => {
-                    const containers = doc.querySelectorAll('article.video, .thumb-block, .video-item');
-                    return Array.from(containers).map(container => {
-                        const link = container.querySelector('a[href*="/"]');
-                        if (!link) return null;
-                        const videoUrl = link.href;
-                        
-                        const title = container.querySelector('.entry-title, .video-title, h2, h3')?.innerText?.trim() || 
-                                      link.title || link.innerText.replace(/^\d+:\d+\s+/, '').trim() || "Video";
-                        
-                        const img = container.querySelector('img');
-                        const rawThumb = img?.getAttribute('data-src') || img?.getAttribute('data-original') || img?.src || '';
-                        const thumbnail = normalizeThumb(rawThumb, baseUrl);
-                        
-                        const duration = container.querySelector('.video-duration, .duration, .time')?.innerText?.trim() || 
-                                         link.innerText.match(/^(\d+:\d+)/)?.[1] || "";
-
-                        return {
-                            id: videoUrl,
-                            title,
-                            url: videoUrl,
-                            source_url: videoUrl,
-                            thumbnail,
-                            duration,
-                            quality: title.includes('4K') ? '4K' : '1080p',
-                            size: 0,
-                        };
-                    }).filter(v => v && v.url.includes('.com/'));
-                };
-
-                let allResults = [];
-                let currentDoc = document;
-                let currentUrl = window.location.href;
-                const visitedPages = new Set();
-
-                for (let i = 0; i < limit; i++) {
-                    visitedPages.add(currentUrl);
-                    allResults = allResults.concat(extractFromDoc(currentDoc, currentUrl));
-                    
-                    const paginationLinks = Array.from(currentDoc.querySelectorAll('.pagination a, a[href*="/page/"]'));
-                    let nextUrl = "";
-                    for(const p of paginationLinks) {
-                        if(p.innerText.toLowerCase().includes('next') || p.innerText.includes('»')) {
-                            nextUrl = p.href;
-                            break;
-                        }
-                    }
-                    
-                    if (!nextUrl || visitedPages.has(nextUrl)) break;
-                    
-                    try {
-                        const response = await fetch(nextUrl);
-                        if (!response.ok) break;
-                        currentUrl = nextUrl;
-                        currentDoc = new DOMParser().parseFromString(await response.text(), 'text/html');
-                    } catch (e) { break; }
-                }
-                const seen = new Set();
-                return allResults.filter(v => { if (!v || !v.url || seen.has(v.url)) return false; seen.add(v.url); return true; });
-            },
-            args: [pageLimit, DASHBOARD_URL]
-        });
-
-        allVideos = (result || []).filter(v => v && v.url);
-        currentlyFilteredVideos = [...allVideos];
-        const folderEl = document.getElementById('folder-name');
-        if (folderEl) folderEl.innerText = `MyPornerLeak Explorer`;
-        applyFilters();
-        updateStats();
-
-        if (allVideos.some(v => !v.directUrl)) {
-            startBackgroundResolution();
-        }
-    } catch (err) {
-        console.error('handleMyPornerLeakScraping', err);
-        showError('MyPornerLeak: ' + err.message);
     }
 }
 
